@@ -1,0 +1,5 @@
+.keyword { -fx-fill: #0000FF; -fx-font-weight: bold; }
+.string { -fx-fill: #008000; }
+.comment { -fx-fill: #808080; -fx-font-style: italic; }
+.paren, .brace, .bracket, .semicolon { -fx-fill: #000000; }
+.code-area { -fx-font-family: 'Consolas', 'Monaco', 'Courier New', monospace; -fx-font-size: 12px; }

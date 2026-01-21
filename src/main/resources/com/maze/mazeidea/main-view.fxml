@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml"
+            fx:controller="com.maze.mazeidea.MainWindowController">
+
+    <top>
+        <VBox spacing="4">
+            <MenuBar>
+                <Menu text="File">
+                    <MenuItem text="Open..." onAction="#onOpenProject" />
+                    <MenuItem fx:id="menuNewProject"
+                              text="New Project..."
+                              onAction="#onNewProject" />
+                    <SeparatorMenuItem/>
+                    <MenuItem text="Exit" onAction="#onExit"/>
+                </Menu>
+                <Menu text="Edit"/>
+                <Menu text="View"/>
+                <Menu text="Navigate"/>
+                <Menu text="Help"/>
+            </MenuBar>
+
+        </VBox>
+    </top>
+
+    <left>
+        <VBox spacing="6" prefWidth="260">
+            <Label text="Project"/>
+            <TreeView fx:id="projectTree" VBox.vgrow="ALWAYS"/>
+        </VBox>
+    </left>
+
+    <center>
+        <TabPane fx:id="editorTabs"/>
+    </center>
+
+    <right>
+        <VBox spacing="6" prefWidth="200">
+            <Label text="Tool Windows"/>
+            <ListView fx:id="toolList" VBox.vgrow="ALWAYS"/>
+        </VBox>
+    </right>
+
+    <bottom>
+        <HBox spacing="8" alignment="CENTER_LEFT" styleClass="status-bar">
+            <Label fx:id="statusLabel" text="Ready"/>
+        </HBox>
+    </bottom>
+
+</BorderPane>
