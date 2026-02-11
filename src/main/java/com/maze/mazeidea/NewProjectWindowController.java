@@ -11,6 +11,7 @@ import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 
@@ -27,7 +28,6 @@ public class NewProjectWindowController {
     @FXML public StackPane wizardStack;
     @FXML public Node templatePage;
     @FXML public Node detailsPage;
-    @FXML public Node depsPage;
 
     // Template page controls
     @FXML public Button chooseSpringBtn;
@@ -36,18 +36,36 @@ public class NewProjectWindowController {
 
     // Details page
     @FXML public TextField projectNameField;
+    @FXML public Label projectNameLabel;
     @FXML public TextField groupIdField;
+    @FXML public Label groupIdLabel;
     @FXML public TextField artifactIdField;
+    @FXML public Label artifactIdLabel;
     @FXML public TextField packageField;
+    @FXML public Label packageLabel;
     @FXML public ChoiceBox<String> javaVersionChoice;
+    @FXML public Label javaVersionLabel;
     @FXML public ChoiceBox<String> packagingChoice;
+    @FXML public Label packagingLabel;
     @FXML public Label nodePathLabel;
     @FXML public TextField nodePathField;
+    @FXML public Button detectNodeButton;
+    @FXML public Button installNodeButton;
+    @FXML public Label nodeStatusLabel;
     @FXML public Label ngCliLabel;
     @FXML public TextField ngCliField;
+    @FXML public Button detectNgButton;
+    @FXML public Button installNgButton;
+    @FXML public Label ngCliStatusLabel;
     @FXML public TextField locationField;
+    @FXML public Label locationLabel;
     @FXML public Button browseButton;
     @FXML public Label targetPreviewLabel;
+    @FXML public VBox springSection;
+    @FXML public VBox nodeSection;
+    @FXML public Label summaryTemplateLabel;
+    @FXML public Label summaryNameLabel;
+    @FXML public Label summaryLocationLabel;
 
     // Dependencies page
     @FXML public TextField depSearch;
@@ -70,7 +88,7 @@ public class NewProjectWindowController {
     private final ObservableList<CheckBox> allDeps = FXCollections.observableArrayList();
     private FilteredList<CheckBox> filteredDeps;
 
-    private int step = 0; // 0 template,1 details,2 deps
+    private int step = 0; // 0 template,1 details
 
     private static final String PREF_OPEN_MODE = "newProject.openMode";
     private static final String PREF_LAST_TEMPLATE = "newProject.lastTemplate";
@@ -92,6 +110,19 @@ public class NewProjectWindowController {
         if (backButton != null) backButton.setOnAction(e -> back());
         if (nextButton != null) nextButton.setOnAction(e -> next());
         if (finishButton != null) finishButton.setOnAction(e -> finish());
+        if (detectNodeButton != null) detectNodeButton.setOnAction(e -> autoDetectNodeAndCli(false, true));
+        if (installNodeButton != null) installNodeButton.setOnAction(e -> showDownloadDialog(
+                "Node.js",
+                "Download Node.js from https://nodejs.org/en/download/ and install it.\n\n" +
+                        "After installation, restart the IDE and click Auto-detect."
+        ));
+        if (detectNgButton != null) detectNgButton.setOnAction(e -> autoDetectNodeAndCli(true, true));
+        if (installNgButton != null) installNgButton.setOnAction(e -> showDownloadDialog(
+                "Angular CLI",
+                "Install Angular CLI with:\n\n" +
+                        "npm install -g @angular/cli\n\n" +
+                        "Then restart the IDE and click Auto-detect."
+        ));
 
         // Load last-used template and, if present, open its details page
         try {
@@ -129,6 +160,8 @@ public class NewProjectWindowController {
                 String name = (projectNameField != null && !projectNameField.getText().isBlank()) ? projectNameField.getText() : "my-project";
                 Path preview = Paths.get(loc).resolve(name);
                 if (targetPreviewLabel != null) targetPreviewLabel.setText("Target: " + preview.toAbsolutePath().toString());
+                if (summaryNameLabel != null) summaryNameLabel.setText("Name: " + name);
+                if (summaryLocationLabel != null) summaryLocationLabel.setText("Location: " + loc);
             } catch (Exception ignored) {}
         };
         if (locationField != null) locationField.textProperty().addListener((obs, o, n) -> updatePreview.run());
@@ -195,21 +228,23 @@ public class NewProjectWindowController {
         // Back/Next initial state
         if (backButton != null) backButton.setDisable(true);
         if (finishButton != null) { finishButton.setVisible(false); finishButton.setManaged(false); }
+
+        autoDetectNodeAndCli(true, false);
     }
 
     private void setStep(int s) {
         step = s;
         if (templatePage != null) { templatePage.setVisible(step==0); templatePage.setManaged(step==0); }
         if (detailsPage != null) { detailsPage.setVisible(step==1); detailsPage.setManaged(step==1); }
-        if (depsPage != null) { depsPage.setVisible(step==2); depsPage.setManaged(step==2); }
         if (backButton != null) backButton.setDisable(step==0);
-        if (nextButton != null) nextButton.setDisable(step==2);
-        if (finishButton != null) { finishButton.setVisible(step==2); finishButton.setManaged(step==2); }
+        if (nextButton != null) { nextButton.setVisible(step==0); nextButton.setManaged(step==0); }
+        if (finishButton != null) { finishButton.setVisible(step==1); finishButton.setManaged(step==1); }
     }
 
     private void showDetailsFor(Template t) {
         // preset some defaults
         if (projectNameField==null) return;
+        if (summaryTemplateLabel != null) summaryTemplateLabel.setText("Template: " + prettyTemplateName(t));
         switch (t) {
             case SPRING: {
                 projectNameField.setText("demo");
@@ -218,28 +253,29 @@ public class NewProjectWindowController {
                 packageField.setText("com.example.demo");
                 if (javaVersionChoice!=null) javaVersionChoice.getSelectionModel().select("17");
                 if (packagingChoice!=null) packagingChoice.getSelectionModel().select("jar");
-                if (nodePathLabel!=null) { nodePathLabel.setVisible(false); nodePathLabel.setManaged(false); }
-                if (nodePathField!=null) { nodePathField.setVisible(false); nodePathField.setManaged(false); }
-                if (ngCliLabel!=null) { ngCliLabel.setVisible(false); ngCliLabel.setManaged(false); }
-                if (ngCliField!=null) { ngCliField.setVisible(false); ngCliField.setManaged(false); }
+                if (springSection != null) { springSection.setVisible(true); springSection.setManaged(true); }
+                if (nodeSection != null) { nodeSection.setVisible(false); nodeSection.setManaged(false); }
+                populateDependenciesFor(t);
                 break;
             }
             case REACT: {
                 projectNameField.setText("react-app");
-                if (groupIdField!=null) groupIdField.setText(""); if (artifactIdField!=null) artifactIdField.setText(""); if (packageField!=null) packageField.setText("");
-                if (nodePathLabel!=null) { nodePathLabel.setVisible(true); nodePathLabel.setManaged(true); }
-                if (nodePathField!=null) { nodePathField.setVisible(true); nodePathField.setManaged(true); }
+                if (springSection != null) { springSection.setVisible(false); springSection.setManaged(false); }
+                if (nodeSection != null) { nodeSection.setVisible(true); nodeSection.setManaged(true); }
                 if (ngCliLabel!=null) { ngCliLabel.setVisible(false); ngCliLabel.setManaged(false); }
                 if (ngCliField!=null) { ngCliField.setVisible(false); ngCliField.setManaged(false); }
+                if (ngCliStatusLabel!=null) { ngCliStatusLabel.setVisible(false); ngCliStatusLabel.setManaged(false); }
+                autoDetectNodeAndCli(false, true);
                 break;
             }
             case ANGULAR: {
                 projectNameField.setText("angular-app");
-                if (groupIdField!=null) groupIdField.setText(""); if (artifactIdField!=null) artifactIdField.setText(""); if (packageField!=null) packageField.setText("");
-                if (nodePathLabel!=null) { nodePathLabel.setVisible(true); nodePathLabel.setManaged(true); }
-                if (nodePathField!=null) { nodePathField.setVisible(true); nodePathField.setManaged(true); }
+                if (springSection != null) { springSection.setVisible(false); springSection.setManaged(false); }
+                if (nodeSection != null) { nodeSection.setVisible(true); nodeSection.setManaged(true); }
                 if (ngCliLabel!=null) { ngCliLabel.setVisible(true); ngCliLabel.setManaged(true); }
                 if (ngCliField!=null) { ngCliField.setVisible(true); ngCliField.setManaged(true); }
+                if (ngCliStatusLabel!=null) { ngCliStatusLabel.setVisible(true); ngCliStatusLabel.setManaged(true); }
+                autoDetectNodeAndCli(true, true);
                 break;
             }
         }
@@ -248,12 +284,104 @@ public class NewProjectWindowController {
 
     private void back() { if (step>0) setStep(step-1); }
     private void next() {
-        if (step==0) { /* shouldn't happen */ }
-        else if (step==1) {
-            // prepare deps page: detect local maven artifacts (for spring) or npm (for node)
-            populateDependenciesFor(selectedTemplate);
-            setStep(2);
+        if (step == 0) {
+            if (selectedTemplate == null) {
+                Alert a = new Alert(Alert.AlertType.WARNING, "Select a template to continue.", ButtonType.OK);
+                a.setTitle("Choose template");
+                a.showAndWait();
+                return;
+            }
+            setStep(1);
         }
+    }
+
+    private String prettyTemplateName(Template t) {
+        if (t == null) return "-";
+        switch (t) {
+            case SPRING: return "Spring Boot";
+            case REACT: return "React";
+            case ANGULAR: return "Angular";
+            default: return t.name();
+        }
+    }
+
+    private void autoDetectNodeAndCli(boolean includeNg, boolean allowFieldUpdate) {
+        Thread t = new Thread(() -> {
+            String nodePath = resolveExecutable("node");
+            String nodeVersion = (nodePath != null) ? readVersion(nodePath, "--version") : null;
+            String ngPath = includeNg ? resolveExecutable("ng") : null;
+            String ngVersion = (ngPath != null) ? readVersion(ngPath, "--version") : null;
+
+            Platform.runLater(() -> {
+                if (allowFieldUpdate && nodePathField != null && isBlank(nodePathField.getText()) && nodePath != null) {
+                    nodePathField.setText(nodePath);
+                }
+                if (nodeStatusLabel != null) {
+                    nodeStatusLabel.setText(nodePath != null
+                            ? "Node: " + (nodeVersion != null ? nodeVersion : "detected")
+                            : "Node: not detected");
+                }
+                if (includeNg) {
+                    if (allowFieldUpdate && ngCliField != null && isBlank(ngCliField.getText()) && ngPath != null) {
+                        ngCliField.setText(ngPath);
+                    }
+                    if (ngCliStatusLabel != null) {
+                        ngCliStatusLabel.setText(ngPath != null
+                                ? "Angular CLI: " + (ngVersion != null ? ngVersion : "detected")
+                                : "Angular CLI: not detected");
+                    }
+                }
+            });
+        }, "node-detector");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private String resolveExecutable(String command) {
+        String explicit = findInPath(command);
+        if (explicit != null) return explicit;
+        return null;
+    }
+
+    private String findInPath(String command) {
+        String path = System.getenv("PATH");
+        if (path == null || path.isBlank()) return null;
+        String[] dirs = path.split(java.io.File.pathSeparator);
+        boolean isWindows = System.getProperty("os.name").toLowerCase().contains("win");
+        String[] exts = isWindows ? new String[] {".exe", ".cmd", ".bat"} : new String[] {""};
+        for (String dir : dirs) {
+            if (dir == null || dir.isBlank()) continue;
+            for (String ext : exts) {
+                Path p = Paths.get(dir, command + ext);
+                if (Files.exists(p) && Files.isRegularFile(p) && Files.isExecutable(p)) {
+                    return p.toAbsolutePath().toString();
+                }
+            }
+        }
+        return null;
+    }
+
+    private String readVersion(String command, String arg) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(command, arg);
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                String line = r.readLine();
+                p.waitFor(2, TimeUnit.SECONDS);
+                if (line != null && !line.isBlank()) return line.trim();
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private boolean isBlank(String s) { return s == null || s.trim().isEmpty(); }
+
+    private void showDownloadDialog(String title, String message) {
+        Alert a = new Alert(Alert.AlertType.INFORMATION, message, ButtonType.OK);
+        a.setTitle(title);
+        a.initModality(Modality.APPLICATION_MODAL);
+        a.showAndWait();
     }
 
     private void populateDependenciesFor(Template t) {

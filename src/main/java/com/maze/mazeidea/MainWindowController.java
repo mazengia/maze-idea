@@ -2,6 +2,8 @@ package com.maze.mazeidea;
 
 import com.maze.mazeidea.lsp.LspService;
 import com.maze.mazeidea.util.Debouncer;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
@@ -9,19 +11,29 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.layout.VBox;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.Priority;
 import javafx.stage.Stage;
+import javafx.stage.WindowEvent;
 import org.fxmisc.richtext.CodeArea;
 import org.fxmisc.richtext.LineNumberFactory;
 import org.fxmisc.richtext.model.StyleSpans;
 import org.fxmisc.richtext.model.StyleSpansBuilder;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.BufferedReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.prefs.Preferences;
+import java.util.stream.Collectors;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
@@ -33,9 +45,25 @@ public class MainWindowController {
     @FXML public ListView<String> toolList;
     @FXML public Label statusLabel;
     @FXML public MenuItem menuNewProject;
+    @FXML public TabPane toolTabs;
+    @FXML public Button toolProjectButton;
+    @FXML public Button toolDatabaseButton;
+    @FXML public Button toolRunButton;
+    @FXML public Button toolBuildButton;
+    @FXML public Button toolGitButton;
+    @FXML public Button toolTerminalButton;
+    @FXML public ChoiceBox<String> runConfigChoice;
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> new Thread(r, "syntax-highlighter"));
     private final Debouncer debouncer = new Debouncer();
+    private Stage runStage;
+    private TextArea runConsole;
+    private final Preferences prefs = Preferences.userNodeForPackage(MainWindowController.class);
+    private final List<RunConfig> runConfigs = new ArrayList<>();
+    private boolean runConfigListenerAdded = false;
+
+    private static final String PREF_RUN_COUNT = "run.config.count";
+    private static final String PREF_RUN_SELECTED = "run.config.selected";
 
     private static final String[] KEYWORDS = new String[] {
             "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class", "const",
@@ -66,6 +94,7 @@ public class MainWindowController {
     @FXML
     public void initialize() {
         toolList.getItems().addAll("Search", "Git", "Problems");
+        loadRunConfigs();
 
         TreeItem<java.nio.file.Path> rootNode = new TreeItem<>(null);
         projectTree.setRoot(rootNode);
@@ -123,6 +152,7 @@ public class MainWindowController {
                 editorTabs.getTabs().clear();
                 statusLabel.setText("Workspace switched to: " + (root != null ? root.toString() : "(none)"));
                 refreshProjectTree(root);
+                refreshRunConfigsForWorkspace(root);
             });
         });
     }
@@ -193,6 +223,8 @@ public class MainWindowController {
             if (Files.exists(filePath) && Files.isRegularFile(filePath)) {
                 String text = Files.readString(filePath);
                 codeArea.replaceText(0, 0, text);
+                StyleSpans<Collection<String>> spans = computeHighlighting(text);
+                codeArea.setStyleSpans(0, spans);
                 com.maze.mazeidea.lsp.LspService lsp = ServiceManager.getLspService(com.maze.mazeidea.lsp.LspService.class);
                 if (lsp != null) lsp.didOpen(filePath, text);
             }
@@ -434,6 +466,7 @@ public class MainWindowController {
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("new-project.fxml"));
             Scene scene = new Scene(loader.load());
+            scene.getStylesheets().add(getClass().getResource("ide-theme.css").toExternalForm());
             Stage stage = new Stage();
             stage.setTitle("New Project");
             stage.setScene(scene);
@@ -459,11 +492,401 @@ public class MainWindowController {
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("search-window.fxml"));
             Scene scene = new Scene(loader.load());
+            scene.getStylesheets().add(getClass().getResource("ide-theme.css").toExternalForm());
             Stage stage = new Stage();
             stage.setTitle("Search");
             stage.setScene(scene);
             stage.show();
         } catch (IOException e) { e.printStackTrace(); }
+    }
+
+    @FXML
+    public void onRun() {
+        runSelected(false);
+    }
+
+    @FXML
+    public void onDebug() {
+        runSelected(true);
+    }
+
+    @FXML
+    public void onEditRunConfigs() {
+        showRunConfigDialog();
+    }
+
+    @FXML
+    public void onToolProject() {
+        if (projectTree != null) projectTree.requestFocus();
+    }
+
+    @FXML
+    public void onToolDatabase() {
+        selectToolTab("Database");
+    }
+
+    @FXML
+    public void onToolRun() {
+        selectToolTab("Run");
+    }
+
+    @FXML
+    public void onToolBuild() {
+        selectToolTab("Build");
+    }
+
+    @FXML
+    public void onToolGit() {
+        selectToolTab("Git");
+    }
+
+    @FXML
+    public void onToolTerminal() {
+        selectToolTab("Terminal");
+    }
+
+    private TextArea ensureRunConsole() {
+        if (runStage != null && runStage.isShowing() && runConsole != null) {
+            runStage.toFront();
+            return runConsole;
+        }
+
+        runConsole = new TextArea();
+        runConsole.setEditable(false);
+        runConsole.setWrapText(false);
+        runConsole.getStyleClass().add("run-console");
+
+        Scene scene = new Scene(new VBox(runConsole), 900, 300);
+        scene.getStylesheets().add(getClass().getResource("ide-theme.css").toExternalForm());
+        Stage stage = new Stage();
+        stage.setTitle("Run Console");
+        stage.setScene(scene);
+        stage.addEventHandler(WindowEvent.WINDOW_HIDDEN, e -> {
+            runStage = null;
+            runConsole = null;
+        });
+        stage.show();
+        runStage = stage;
+        return runConsole;
+    }
+
+    private void runSelected(boolean debug) {
+        RunConfig cfg = getSelectedRunConfig();
+        if (cfg == null) {
+            statusLabel.setText("No run configuration selected.");
+            return;
+        }
+        Path workDir = resolveWorkingDir(cfg);
+        if (workDir == null) {
+            statusLabel.setText("Invalid working directory.");
+            return;
+        }
+
+        List<String> cmd = buildCommand(cfg);
+        if (cmd.isEmpty()) {
+            statusLabel.setText("Run configuration is missing a command.");
+            return;
+        }
+
+        TextArea console = ensureRunConsole();
+        console.appendText("> " + String.join(" ", cmd) + System.lineSeparator());
+        statusLabel.setText((debug ? "Debugging " : "Running ") + cfg.name + "...");
+
+        Thread t = new Thread(() -> {
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            pb.directory(workDir.toFile());
+            pb.redirectErrorStream(true);
+            if (debug) {
+                if (cfg.type == RunType.SPRING_BOOT) {
+                    pb.environment().put("JAVA_TOOL_OPTIONS", "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005");
+                } else if (cfg.type == RunType.NODE || cfg.type == RunType.ANGULAR) {
+                    pb.environment().put("NODE_OPTIONS", "--inspect=9229");
+                }
+            }
+            try {
+                Process p = pb.start();
+                try (InputStream is = p.getInputStream();
+                     BufferedReader br = new BufferedReader(new InputStreamReader(is))) {
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        String out = line + System.lineSeparator();
+                        javafx.application.Platform.runLater(() -> console.appendText(out));
+                    }
+                }
+                int code = p.waitFor();
+                javafx.application.Platform.runLater(() -> statusLabel.setText("Run finished (exit " + code + ")."));
+            } catch (Exception e) {
+                javafx.application.Platform.runLater(() -> {
+                    console.appendText("Run failed: " + e.getMessage() + System.lineSeparator());
+                    statusLabel.setText("Run failed.");
+                });
+            }
+        }, "run-project");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private RunConfig getSelectedRunConfig() {
+        if (runConfigChoice == null || runConfigs.isEmpty()) return null;
+        String name = runConfigChoice.getValue();
+        if (name == null) return runConfigs.get(0);
+        for (RunConfig c : runConfigs) {
+            if (name.equals(c.name)) return c;
+        }
+        return runConfigs.get(0);
+    }
+
+    private Path resolveWorkingDir(RunConfig cfg) {
+        String dir = cfg.workingDir;
+        if (dir == null || dir.isBlank()) {
+            Path root = WorkspaceManager.getWorkspaceRoot();
+            return root != null ? root : null;
+        }
+        try {
+            return Path.of(dir);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private List<String> buildCommand(RunConfig cfg) {
+        String cmd = cfg.command;
+        String args = cfg.args;
+        List<String> list = new ArrayList<>();
+        if (cmd == null || cmd.isBlank()) {
+            return buildDefaultCommand(cfg);
+        }
+        list.add(cmd.trim());
+        list.addAll(parseArgs(args));
+        return list;
+    }
+
+    private List<String> buildDefaultCommand(RunConfig cfg) {
+        List<String> list = new ArrayList<>();
+        if (cfg.type == RunType.SPRING_BOOT) {
+            list.add("mvn");
+            list.add("spring-boot:run");
+        } else if (cfg.type == RunType.ANGULAR) {
+            String ng = resolveExecutable("ng");
+            if (ng != null) {
+                list.add(ng);
+                list.add("serve");
+            } else {
+                list.add("npm");
+                list.add("start");
+            }
+        } else if (cfg.type == RunType.NODE) {
+            list.add("npm");
+            list.add("run");
+            list.add("start");
+        }
+        return list;
+    }
+
+    private List<String> parseArgs(String args) {
+        if (args == null || args.isBlank()) return new ArrayList<>();
+        List<String> out = new ArrayList<>();
+        StringBuilder cur = new StringBuilder();
+        boolean inQuotes = false;
+        for (int i = 0; i < args.length(); i++) {
+            char c = args.charAt(i);
+            if (c == '"') {
+                inQuotes = !inQuotes;
+            } else if (!inQuotes && Character.isWhitespace(c)) {
+                if (cur.length() > 0) {
+                    out.add(cur.toString());
+                    cur.setLength(0);
+                }
+            } else {
+                cur.append(c);
+            }
+        }
+        if (cur.length() > 0) out.add(cur.toString());
+        return out;
+    }
+
+    private void loadRunConfigs() {
+        runConfigs.clear();
+        int count = prefs.getInt(PREF_RUN_COUNT, 0);
+        for (int i = 0; i < count; i++) {
+            String name = prefs.get("run.config." + i + ".name", null);
+            String type = prefs.get("run.config." + i + ".type", RunType.CUSTOM.name());
+            String cmd = prefs.get("run.config." + i + ".cmd", "");
+            String args = prefs.get("run.config." + i + ".args", "");
+            String dir = prefs.get("run.config." + i + ".dir", "");
+            if (name != null) {
+                runConfigs.add(new RunConfig(name, RunType.valueOf(type), cmd, args, dir));
+            }
+        }
+        if (runConfigs.isEmpty()) {
+            Path root = WorkspaceManager.getWorkspaceRoot();
+            runConfigs.addAll(detectDefaultConfigs(root));
+        }
+        refreshRunConfigChoice();
+    }
+
+    private void refreshRunConfigsForWorkspace(Path root) {
+        if (runConfigs.isEmpty()) {
+            runConfigs.addAll(detectDefaultConfigs(root));
+            refreshRunConfigChoice();
+        }
+    }
+
+    private void saveRunConfigs() {
+        prefs.putInt(PREF_RUN_COUNT, runConfigs.size());
+        for (int i = 0; i < runConfigs.size(); i++) {
+            RunConfig c = runConfigs.get(i);
+            prefs.put("run.config." + i + ".name", c.name);
+            prefs.put("run.config." + i + ".type", c.type.name());
+            prefs.put("run.config." + i + ".cmd", c.command == null ? "" : c.command);
+            prefs.put("run.config." + i + ".args", c.args == null ? "" : c.args);
+            prefs.put("run.config." + i + ".dir", c.workingDir == null ? "" : c.workingDir);
+        }
+        if (runConfigChoice != null && runConfigChoice.getValue() != null) {
+            prefs.put(PREF_RUN_SELECTED, runConfigChoice.getValue());
+        }
+    }
+
+    private void refreshRunConfigChoice() {
+        if (runConfigChoice == null) return;
+        List<String> names = runConfigs.stream().map(c -> c.name).collect(Collectors.toList());
+        runConfigChoice.getItems().setAll(names);
+        String selected = prefs.get(PREF_RUN_SELECTED, null);
+        if (selected != null && names.contains(selected)) runConfigChoice.setValue(selected);
+        else if (!names.isEmpty()) runConfigChoice.setValue(names.get(0));
+        if (!runConfigListenerAdded) {
+            runConfigChoice.getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> {
+                if (newV != null) prefs.put(PREF_RUN_SELECTED, newV);
+            });
+            runConfigListenerAdded = true;
+        }
+    }
+
+    private List<RunConfig> detectDefaultConfigs(Path root) {
+        List<RunConfig> out = new ArrayList<>();
+        if (root == null) return out;
+        if (Files.exists(root.resolve("pom.xml"))) {
+            out.add(new RunConfig("Spring Boot", RunType.SPRING_BOOT, "mvn", "spring-boot:run", root.toString()));
+        }
+        if (Files.exists(root.resolve("angular.json"))) {
+            out.add(new RunConfig("Angular", RunType.ANGULAR, "", "", root.toString()));
+        }
+        if (Files.exists(root.resolve("package.json")) && out.stream().noneMatch(c -> c.type == RunType.ANGULAR)) {
+            out.add(new RunConfig("Node", RunType.NODE, "", "", root.toString()));
+        }
+        return out;
+    }
+
+    private String resolveExecutable(String command) {
+        String path = System.getenv("PATH");
+        if (path == null || path.isBlank()) return null;
+        String[] dirs = path.split(java.io.File.pathSeparator);
+        boolean isWindows = System.getProperty("os.name").toLowerCase().contains("win");
+        String[] exts = isWindows ? new String[] {".exe", ".cmd", ".bat"} : new String[] {""};
+        for (String dir : dirs) {
+            if (dir == null || dir.isBlank()) continue;
+            for (String ext : exts) {
+                Path p = Path.of(dir, command + ext);
+                if (Files.exists(p) && Files.isRegularFile(p) && Files.isExecutable(p)) {
+                    return p.toString();
+                }
+            }
+        }
+        return null;
+    }
+
+    private void showRunConfigDialog() {
+        Stage stage = new Stage();
+        stage.setTitle("Run/Debug Configurations");
+        ObservableList<RunConfig> items = FXCollections.observableArrayList(runConfigs);
+        ListView<RunConfig> list = new ListView<>(items);
+
+        TextField nameField = new TextField();
+        ChoiceBox<RunType> typeChoice = new ChoiceBox<>(FXCollections.observableArrayList(RunType.values()));
+        TextField cmdField = new TextField();
+        TextField argsField = new TextField();
+        TextField dirField = new TextField();
+        Button browse = new Button("Browse...");
+
+        list.getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> {
+            if (newV == null) return;
+            nameField.setText(newV.name);
+            typeChoice.setValue(newV.type);
+            cmdField.setText(newV.command);
+            argsField.setText(newV.args);
+            dirField.setText(newV.workingDir);
+        });
+
+        Button add = new Button("Add");
+        Button remove = new Button("Remove");
+        Button save = new Button("Save");
+        Button close = new Button("Close");
+
+        add.setOnAction(e -> {
+            RunConfig c = new RunConfig("New Config", RunType.CUSTOM, "", "", defaultWorkingDir());
+            items.add(c);
+            list.getSelectionModel().select(c);
+        });
+        remove.setOnAction(e -> {
+            RunConfig c = list.getSelectionModel().getSelectedItem();
+            if (c != null) items.remove(c);
+        });
+        save.setOnAction(e -> {
+            RunConfig c = list.getSelectionModel().getSelectedItem();
+            if (c == null) return;
+            c.name = nameField.getText();
+            c.type = typeChoice.getValue() != null ? typeChoice.getValue() : RunType.CUSTOM;
+            c.command = cmdField.getText();
+            c.args = argsField.getText();
+            c.workingDir = dirField.getText();
+            list.refresh();
+            runConfigs.clear();
+            runConfigs.addAll(items);
+            saveRunConfigs();
+            refreshRunConfigChoice();
+        });
+        close.setOnAction(e -> stage.close());
+
+        browse.setOnAction(e -> {
+            javafx.stage.DirectoryChooser dc = new javafx.stage.DirectoryChooser();
+            dc.setTitle("Select Working Directory");
+            java.io.File chosen = dc.showDialog(stage);
+            if (chosen != null && chosen.exists() && chosen.isDirectory()) {
+                dirField.setText(chosen.getAbsolutePath());
+            }
+        });
+
+        if (!items.isEmpty()) list.getSelectionModel().select(0);
+        if (typeChoice.getValue() == null) typeChoice.setValue(RunType.CUSTOM);
+
+        GridPane form = new GridPane();
+        form.setHgap(8);
+        form.setVgap(8);
+        form.add(new Label("Name:"), 0, 0);
+        form.add(nameField, 1, 0);
+        form.add(new Label("Type:"), 0, 1);
+        form.add(typeChoice, 1, 1);
+        form.add(new Label("Command:"), 0, 2);
+        form.add(cmdField, 1, 2);
+        form.add(new Label("Arguments:"), 0, 3);
+        form.add(argsField, 1, 3);
+        form.add(new Label("Working Dir:"), 0, 4);
+        HBox dirRow = new HBox(8, dirField, browse);
+        HBox.setHgrow(dirField, Priority.ALWAYS);
+        form.add(dirRow, 1, 4);
+
+        HBox buttons = new HBox(8, add, remove, save, close);
+        VBox root = new VBox(10, new HBox(10, list, form), buttons);
+        root.setStyle("-fx-padding: 10;");
+        Scene scene = new Scene(root, 780, 360);
+        scene.getStylesheets().add(getClass().getResource("ide-theme.css").toExternalForm());
+        stage.setScene(scene);
+        stage.show();
+    }
+
+    private String defaultWorkingDir() {
+        Path root = WorkspaceManager.getWorkspaceRoot();
+        return root != null ? root.toString() : System.getProperty("user.dir");
     }
 
     @FXML
@@ -516,5 +939,38 @@ public class MainWindowController {
         l.setMaxWidth(18);
         l.setStyle("-fx-font-size:12px;");
         return l;
+    }
+
+    private void selectToolTab(String name) {
+        if (toolTabs == null) return;
+        for (Tab t : toolTabs.getTabs()) {
+            if (name.equalsIgnoreCase(t.getText())) {
+                toolTabs.getSelectionModel().select(t);
+                return;
+            }
+        }
+    }
+
+    private enum RunType { SPRING_BOOT, NODE, ANGULAR, CUSTOM }
+
+    private static class RunConfig {
+        String name;
+        RunType type;
+        String command;
+        String args;
+        String workingDir;
+
+        RunConfig(String name, RunType type, String command, String args, String workingDir) {
+            this.name = name;
+            this.type = type;
+            this.command = command;
+            this.args = args;
+            this.workingDir = workingDir;
+        }
+
+        @Override
+        public String toString() {
+            return name;
+        }
     }
 }

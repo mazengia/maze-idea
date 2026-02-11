@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox spacing="8" xmlns:fx="http://javafx.com/fxml" fx:controller="com.maze.mazeidea.db.DatabaseToolController" styleClass="tool-window">
+    <padding>
+        <Insets top="8" right="8" bottom="8" left="8" />
+    </padding>
+    <Label text="Database" styleClass="section-title"/>
+    <GridPane hgap="8" vgap="6">
+        <columnConstraints>
+            <ColumnConstraints halignment="RIGHT" minWidth="90" />
+            <ColumnConstraints hgrow="ALWAYS" />
+        </columnConstraints>
+        <Label text="Type:" GridPane.rowIndex="0" GridPane.columnIndex="0" />
+        <ChoiceBox fx:id="dbTypeChoice" GridPane.rowIndex="0" GridPane.columnIndex="1" />
+
+        <Label text="Host:" GridPane.rowIndex="1" GridPane.columnIndex="0" />
+        <ComboBox fx:id="hostChoice" GridPane.rowIndex="1" GridPane.columnIndex="1" editable="true" />
+
+        <Label text="Port:" GridPane.rowIndex="2" GridPane.columnIndex="0" />
+        <TextField fx:id="portField" GridPane.rowIndex="2" GridPane.columnIndex="1" />
+
+        <Label text="Database:" GridPane.rowIndex="3" GridPane.columnIndex="0" />
+        <TextField fx:id="dbNameField" GridPane.rowIndex="3" GridPane.columnIndex="1" />
+
+        <Label text="JDBC URL:" GridPane.rowIndex="4" GridPane.columnIndex="0" />
+        <TextField fx:id="jdbcUrlField" GridPane.rowIndex="4" GridPane.columnIndex="1" promptText="jdbc:postgresql://localhost:5432/app" />
+
+        <Label text="User:" GridPane.rowIndex="5" GridPane.columnIndex="0" />
+        <TextField fx:id="userField" GridPane.rowIndex="5" GridPane.columnIndex="1" />
+
+        <Label text="Password:" GridPane.rowIndex="6" GridPane.columnIndex="0" />
+        <PasswordField fx:id="passwordField" GridPane.rowIndex="6" GridPane.columnIndex="1" />
+
+        <Label text="Driver:" GridPane.rowIndex="7" GridPane.columnIndex="0" />
+        <TextField fx:id="driverField" GridPane.rowIndex="7" GridPane.columnIndex="1" promptText="org.postgresql.Driver (optional)" />
+    </GridPane>
+
+    <HBox spacing="8">
+        <Button fx:id="connectButton" text="Connect" styleClass="primary-action"/>
+        <Button fx:id="disconnectButton" text="Disconnect"/>
+        <Label fx:id="statusLabel" text="Not connected" />
+    </HBox>
+
+    <Label text="Tables" styleClass="section-title"/>
+    <ListView fx:id="tablesList" prefHeight="120"/>
+
+    <Label text="Query Console" styleClass="section-title"/>
+    <TextArea fx:id="queryArea" prefRowCount="5" promptText="SELECT * FROM table;" />
+    <HBox spacing="8">
+        <Button fx:id="runQueryButton" text="Run Query" styleClass="primary-action" />
+        <Label fx:id="queryStatusLabel" text="" />
+    </HBox>
+    <TextArea fx:id="queryOutput" prefRowCount="8" editable="false" wrapText="false"/>
+</VBox>

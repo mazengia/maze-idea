@@ -6,11 +6,11 @@
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.VBox?>
 
-<VBox spacing="6" xmlns:fx="http://javafx.com/fxml" fx:controller="com.maze.mazeidea.SearchWindowController">
+<VBox spacing="6" xmlns:fx="http://javafx.com/fxml" fx:controller="com.maze.mazeidea.SearchWindowController" styleClass="search-root">
     <padding>
         <Insets top="10" right="10" bottom="10" left="10" />
     </padding>
-    <TextField fx:id="queryField" promptText="Enter search query" />
-    <Button fx:id="searchButton" text="Search" />
-    <ListView fx:id="resultsList" />
+    <TextField fx:id="queryField" promptText="Enter search query" styleClass="search-field" />
+    <Button fx:id="searchButton" text="Search" styleClass="primary-action" />
+    <ListView fx:id="resultsList" styleClass="tool-list" />
 </VBox>

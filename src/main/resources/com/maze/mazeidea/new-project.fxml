@@ -4,88 +4,114 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<VBox spacing="12" xmlns:fx="http://javafx.com/fxml" fx:controller="com.maze.mazeidea.NewProjectWindowController">
+<VBox spacing="12" xmlns:fx="http://javafx.com/fxml" fx:controller="com.maze.mazeidea.NewProjectWindowController" styleClass="wizard-root">
     <padding>
         <Insets top="12" right="12" bottom="12" left="12" />
     </padding>
 
-    <Label text="New Project" style="-fx-font-size:16px; -fx-font-weight:bold;" />
+    <Label text="New Project" styleClass="wizard-title" />
+    <HBox spacing="6" styleClass="wizard-steps">
+        <Label text="1. Templates" styleClass="step-chip" />
+        <Label text="2. Details" styleClass="step-chip" />
+    </HBox>
 
-    <StackPane fx:id="wizardStack" VBox.vgrow="ALWAYS">
+    <StackPane fx:id="wizardStack" VBox.vgrow="ALWAYS" styleClass="wizard-card">
         <!-- Step 1: Template selection -->
         <VBox fx:id="templatePage" spacing="8">
-            <Label text="Choose Project Type" style="-fx-font-weight:bold;" />
-            <HBox spacing="8">
-                <VBox spacing="6" style="-fx-border-color: #ddd; -fx-padding: 8;">
-                    <Label text="Spring Boot" style="-fx-font-weight:bold;" />
-                    <Label text="Create a Spring Boot application with Maven." wrapText="true" />
-                    <Button fx:id="chooseSpringBtn" text="Create Spring Boot..." />
-                </VBox>
-                <VBox spacing="6" style="-fx-border-color: #ddd; -fx-padding: 8;">
-                    <Label text="React" style="-fx-font-weight:bold;" />
-                    <Label text="Create a React app (npm)." wrapText="true" />
-                    <Button fx:id="chooseReactBtn" text="Create React..." />
-                </VBox>
-                <VBox spacing="6" style="-fx-border-color: #ddd; -fx-padding: 8;">
-                    <Label text="Angular" style="-fx-font-weight:bold;" />
-                    <Label text="Create an Angular app (npm)." wrapText="true" />
-                    <Button fx:id="chooseAngularBtn" text="Create Angular..." />
-                </VBox>
-            </HBox>
+            <Label text="Choose Project Type" styleClass="section-title" />
+            <VBox spacing="6" styleClass="template-list">
+                <Button fx:id="chooseSpringBtn" text="Spring Boot" styleClass="template-item" />
+                <Button fx:id="chooseReactBtn" text="React" styleClass="template-item" />
+                <Button fx:id="chooseAngularBtn" text="Angular" styleClass="template-item" />
+            </VBox>
         </VBox>
 
         <!-- Step 2: Details -->
         <VBox fx:id="detailsPage" spacing="8" visible="false" managed="false">
-            <Label text="Project Details" style="-fx-font-weight:bold;" />
-            <GridPane hgap="8" vgap="8">
-                <columnConstraints>
-                    <ColumnConstraints halignment="RIGHT" minWidth="120" />
-                    <ColumnConstraints hgrow="ALWAYS" />
-                </columnConstraints>
+            <Label text="Project Details" styleClass="section-title" />
+            <HBox spacing="16">
+                <VBox spacing="10" HBox.hgrow="ALWAYS">
+                    <GridPane hgap="8" vgap="8">
+                        <columnConstraints>
+                            <ColumnConstraints halignment="RIGHT" minWidth="120" />
+                            <ColumnConstraints hgrow="ALWAYS" />
+                        </columnConstraints>
 
-                <Label text="Project name:" GridPane.rowIndex="0" GridPane.columnIndex="0" />
-                <TextField fx:id="projectNameField" GridPane.rowIndex="0" GridPane.columnIndex="1" />
+                        <Label text="Project name:" fx:id="projectNameLabel" GridPane.rowIndex="0" GridPane.columnIndex="0" />
+                        <TextField fx:id="projectNameField" GridPane.rowIndex="0" GridPane.columnIndex="1" />
 
-                <Label text="Group ID:" GridPane.rowIndex="1" GridPane.columnIndex="0" />
-                <TextField fx:id="groupIdField" GridPane.rowIndex="1" GridPane.columnIndex="1" />
+                        <Label text="Location:" fx:id="locationLabel" GridPane.rowIndex="1" GridPane.columnIndex="0" />
+                        <HBox GridPane.rowIndex="1" GridPane.columnIndex="1" spacing="6">
+                            <TextField fx:id="locationField" HBox.hgrow="ALWAYS" />
+                            <Button fx:id="browseButton" text="Browse..." />
+                        </HBox>
+                        <Label fx:id="targetPreviewLabel" text="Target: " GridPane.rowIndex="2" GridPane.columnIndex="1" />
+                    </GridPane>
 
-                <Label text="Artifact ID:" GridPane.rowIndex="2" GridPane.columnIndex="0" />
-                <TextField fx:id="artifactIdField" GridPane.rowIndex="2" GridPane.columnIndex="1" />
+                    <VBox fx:id="springSection" spacing="8">
+                        <Label text="Spring Boot" styleClass="section-title" />
+                        <GridPane hgap="8" vgap="8">
+                            <columnConstraints>
+                                <ColumnConstraints halignment="RIGHT" minWidth="120" />
+                                <ColumnConstraints hgrow="ALWAYS" />
+                            </columnConstraints>
+                            <Label text="Group ID:" fx:id="groupIdLabel" GridPane.rowIndex="0" GridPane.columnIndex="0" />
+                            <TextField fx:id="groupIdField" GridPane.rowIndex="0" GridPane.columnIndex="1" />
 
-                <Label text="Package:" GridPane.rowIndex="3" GridPane.columnIndex="0" />
-                <TextField fx:id="packageField" GridPane.rowIndex="3" GridPane.columnIndex="1" />
+                            <Label text="Artifact ID:" fx:id="artifactIdLabel" GridPane.rowIndex="1" GridPane.columnIndex="0" />
+                            <TextField fx:id="artifactIdField" GridPane.rowIndex="1" GridPane.columnIndex="1" />
 
-                <Label text="Java Version:" GridPane.rowIndex="4" GridPane.columnIndex="0" />
-                <ChoiceBox fx:id="javaVersionChoice" GridPane.rowIndex="4" GridPane.columnIndex="1" />
+                            <Label text="Package:" fx:id="packageLabel" GridPane.rowIndex="2" GridPane.columnIndex="0" />
+                            <TextField fx:id="packageField" GridPane.rowIndex="2" GridPane.columnIndex="1" />
 
-                <Label text="Packaging:" GridPane.rowIndex="5" GridPane.columnIndex="0" />
-                <ChoiceBox fx:id="packagingChoice" GridPane.rowIndex="5" GridPane.columnIndex="1" />
+                            <Label text="Java Version:" fx:id="javaVersionLabel" GridPane.rowIndex="3" GridPane.columnIndex="0" />
+                            <ChoiceBox fx:id="javaVersionChoice" GridPane.rowIndex="3" GridPane.columnIndex="1" />
 
-                <Label text="Location:" GridPane.rowIndex="8" GridPane.columnIndex="0" />
-                <HBox GridPane.rowIndex="8" GridPane.columnIndex="1" spacing="6">
-                    <TextField fx:id="locationField" HBox.hgrow="ALWAYS" />
-                    <Button fx:id="browseButton" text="Browse..." />
-                </HBox>
-                <Label fx:id="targetPreviewLabel" text="Target: " GridPane.rowIndex="9" GridPane.columnIndex="1" />
+                            <Label text="Packaging:" fx:id="packagingLabel" GridPane.rowIndex="4" GridPane.columnIndex="0" />
+                            <ChoiceBox fx:id="packagingChoice" GridPane.rowIndex="4" GridPane.columnIndex="1" />
+                        </GridPane>
 
-                <!-- Angular/React specific -->
-                <Label text="Node Path:" fx:id="nodePathLabel" GridPane.rowIndex="6" GridPane.columnIndex="0" visible="false" managed="false" />
-                <TextField fx:id="nodePathField" GridPane.rowIndex="6" GridPane.columnIndex="1" visible="false" managed="false" />
+                        <Label text="Dependencies" styleClass="section-title" />
+                        <HBox spacing="8">
+                            <TextField fx:id="depSearch" promptText="Search dependencies..." HBox.hgrow="ALWAYS" />
+                            <Label fx:id="depInfoLabel" text="(available in local repo)" />
+                        </HBox>
+                        <ListView fx:id="dependencyList" prefHeight="160" />
+                    </VBox>
 
-                <Label text="Angular CLI:" fx:id="ngCliLabel" GridPane.rowIndex="7" GridPane.columnIndex="0" visible="false" managed="false" />
-                <TextField fx:id="ngCliField" GridPane.rowIndex="7" GridPane.columnIndex="1" visible="false" managed="false" />
+                    <VBox fx:id="nodeSection" spacing="8">
+                        <Label text="Node" styleClass="section-title" />
+                        <GridPane hgap="8" vgap="8">
+                            <columnConstraints>
+                                <ColumnConstraints halignment="RIGHT" minWidth="120" />
+                                <ColumnConstraints hgrow="ALWAYS" />
+                            </columnConstraints>
+                            <Label text="Node Path:" fx:id="nodePathLabel" GridPane.rowIndex="0" GridPane.columnIndex="0" />
+                            <HBox GridPane.rowIndex="0" GridPane.columnIndex="1" spacing="6">
+                                <TextField fx:id="nodePathField" HBox.hgrow="ALWAYS" />
+                                <Button fx:id="detectNodeButton" text="Auto-detect" />
+                                <Button fx:id="installNodeButton" text="Download..." />
+                            </HBox>
+                            <Label fx:id="nodeStatusLabel" text="Node: not detected" GridPane.rowIndex="1" GridPane.columnIndex="1" />
 
-            </GridPane>
-        </VBox>
+                            <Label text="Angular CLI:" fx:id="ngCliLabel" GridPane.rowIndex="2" GridPane.columnIndex="0" />
+                            <HBox GridPane.rowIndex="2" GridPane.columnIndex="1" spacing="6">
+                                <TextField fx:id="ngCliField" HBox.hgrow="ALWAYS" />
+                                <Button fx:id="detectNgButton" text="Auto-detect" />
+                                <Button fx:id="installNgButton" text="Download..." />
+                            </HBox>
+                            <Label fx:id="ngCliStatusLabel" text="Angular CLI: not detected" GridPane.rowIndex="3" GridPane.columnIndex="1" />
+                        </GridPane>
+                    </VBox>
+                </VBox>
 
-        <!-- Step 3: Dependencies -->
-        <VBox fx:id="depsPage" spacing="8" visible="false" managed="false">
-            <Label text="Select Dependencies" style="-fx-font-weight:bold;" />
-            <HBox spacing="8">
-                <TextField fx:id="depSearch" promptText="Search dependencies..." HBox.hgrow="ALWAYS" />
-                <Label fx:id="depInfoLabel" text="(available in local repo)" />
+                <VBox spacing="6" styleClass="summary-card">
+                    <Label text="Summary" styleClass="section-title" />
+                    <Label fx:id="summaryTemplateLabel" text="Template: -" />
+                    <Label fx:id="summaryNameLabel" text="Name: -" />
+                    <Label fx:id="summaryLocationLabel" text="Location: -" wrapText="true" />
+                </VBox>
             </HBox>
-            <ListView fx:id="dependencyList" prefHeight="200" />
         </VBox>
     </StackPane>
 
@@ -96,7 +122,7 @@
         </HBox>
         <Region HBox.hgrow="ALWAYS" />
         <Button fx:id="backButton" text="Back" />
-        <Button fx:id="nextButton" text="Next" />
-        <Button fx:id="finishButton" text="Finish" visible="false" managed="false" />
+        <Button fx:id="nextButton" text="Next" styleClass="primary-action" />
+        <Button fx:id="finishButton" text="Create" visible="false" managed="false" styleClass="primary-action" />
     </HBox>
 </VBox>

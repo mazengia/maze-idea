@@ -3,12 +3,12 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<BorderPane xmlns:fx="http://javafx.com/fxml"
+<BorderPane xmlns:fx="http://javafx.com/fxml" styleClass="ide-root"
             fx:controller="com.maze.mazeidea.MainWindowController">
 
     <top>
-        <VBox spacing="4">
-            <MenuBar>
+        <VBox spacing="4" styleClass="top-bar">
+            <MenuBar styleClass="main-menu">
                 <Menu text="File">
                     <MenuItem text="Open..." onAction="#onOpenProject" />
                     <MenuItem fx:id="menuNewProject"
@@ -19,29 +19,79 @@
                 </Menu>
                 <Menu text="Edit"/>
                 <Menu text="View"/>
-                <Menu text="Navigate"/>
+                <Menu text="Navigate">
+                    <MenuItem text="Search..." onAction="#onSearch" />
+                </Menu>
+                <Menu text="Run">
+                    <MenuItem text="Run Selected" onAction="#onRun" />
+                    <MenuItem text="Debug Selected" onAction="#onDebug" />
+                    <SeparatorMenuItem/>
+                    <MenuItem text="Edit Configurations..." onAction="#onEditRunConfigs" />
+                </Menu>
                 <Menu text="Help"/>
             </MenuBar>
-
+            <HBox spacing="10" alignment="CENTER_LEFT" styleClass="toolbar">
+                <Button text="New Project" onAction="#onNewProject" styleClass="primary-action" />
+                <Button text="Open" onAction="#onOpenProject" />
+                <Button text="Run" onAction="#onRun" />
+                <Button text="Search" onAction="#onSearch" />
+                <ChoiceBox fx:id="runConfigChoice" />
+                <Region HBox.hgrow="ALWAYS"/>
+                <TextField promptText="Search Everywhere..." styleClass="search-field" />
+            </HBox>
         </VBox>
     </top>
 
     <left>
-        <VBox spacing="6" prefWidth="260">
-            <Label text="Project"/>
-            <TreeView fx:id="projectTree" VBox.vgrow="ALWAYS"/>
-        </VBox>
+        <HBox spacing="0" styleClass="left-dock">
+            <VBox spacing="6" styleClass="tool-strip">
+                <Button fx:id="toolProjectButton" text="Project" onAction="#onToolProject" styleClass="tool-strip-button" />
+                <Button fx:id="toolDatabaseButton" text="Database" onAction="#onToolDatabase" styleClass="tool-strip-button" />
+                <Button fx:id="toolRunButton" text="Run" onAction="#onToolRun" styleClass="tool-strip-button" />
+                <Button fx:id="toolBuildButton" text="Build" onAction="#onToolBuild" styleClass="tool-strip-button" />
+                <Button fx:id="toolGitButton" text="Git" onAction="#onToolGit" styleClass="tool-strip-button" />
+                <Button fx:id="toolTerminalButton" text="Terminal" onAction="#onToolTerminal" styleClass="tool-strip-button" />
+            </VBox>
+            <VBox spacing="6" prefWidth="260" styleClass="tool-window">
+                <Label text="Project" styleClass="section-title"/>
+                <TreeView fx:id="projectTree" VBox.vgrow="ALWAYS" styleClass="project-tree"/>
+            </VBox>
+        </HBox>
     </left>
 
     <center>
-        <TabPane fx:id="editorTabs"/>
+        <TabPane fx:id="editorTabs" styleClass="editor-tabs"/>
     </center>
 
     <right>
-        <VBox spacing="6" prefWidth="200">
-            <Label text="Tool Windows"/>
-            <ListView fx:id="toolList" VBox.vgrow="ALWAYS"/>
-        </VBox>
+        <TabPane fx:id="toolTabs" prefWidth="340" styleClass="tool-tabs">
+            <tabs>
+                <Tab text="Tools">
+                    <VBox spacing="6" styleClass="tool-window">
+                        <Label text="Tool Windows" styleClass="section-title"/>
+                        <ListView fx:id="toolList" VBox.vgrow="ALWAYS" styleClass="tool-list"/>
+                    </VBox>
+                </Tab>
+                <Tab text="Database">
+                    <fx:include source="database-tool.fxml"/>
+                </Tab>
+                <Tab text="Run">
+                    <VBox spacing="6" styleClass="tool-window">
+                        <Label text="Run" styleClass="section-title"/>
+                        <Label text="Use the Run menu or toolbar to start a configuration." wrapText="true"/>
+                    </VBox>
+                </Tab>
+                <Tab text="Build">
+                    <fx:include source="build-tool.fxml"/>
+                </Tab>
+                <Tab text="Git">
+                    <fx:include source="git-tool.fxml"/>
+                </Tab>
+                <Tab text="Terminal">
+                    <fx:include source="terminal-tool.fxml"/>
+                </Tab>
+            </tabs>
+        </TabPane>
     </right>
 
     <bottom>

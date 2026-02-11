@@ -60,6 +60,7 @@ public class HelloApplication extends Application {
         FXMLLoader fxmlLoader = new FXMLLoader(HelloApplication.class.getResource("main-view.fxml"));
         Scene scene = new Scene(fxmlLoader.load(), 1200, 800);
         scene.getStylesheets().add(HelloApplication.class.getResource("syntax-highlighting.css").toExternalForm());
+        scene.getStylesheets().add(HelloApplication.class.getResource("ide-theme.css").toExternalForm());
         stage.setTitle("Maze IDE");
         stage.setScene(scene);
         stage.show();

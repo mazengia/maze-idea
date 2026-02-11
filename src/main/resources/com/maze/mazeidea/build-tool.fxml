@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox spacing="8" xmlns:fx="http://javafx.com/fxml" fx:controller="com.maze.mazeidea.build.BuildToolController" styleClass="tool-window">
+    <padding>
+        <Insets top="8" right="8" bottom="8" left="8" />
+    </padding>
+    <Label text="Build Tools" styleClass="section-title"/>
+    <HBox spacing="8">
+        <Label text="Tool:" />
+        <ChoiceBox fx:id="toolChoice" />
+        <Label text="Tasks:" />
+        <TextField fx:id="tasksField" promptText="clean package / build / test" HBox.hgrow="ALWAYS"/>
+    </HBox>
+    <HBox spacing="8">
+        <Button fx:id="runButton" text="Run" styleClass="primary-action" />
+        <Button fx:id="cleanButton" text="Clean" />
+        <Button fx:id="buildButton" text="Build" />
+        <Button fx:id="testButton" text="Test" />
+        <Label fx:id="statusLabel" text="" />
+    </HBox>
+    <TextArea fx:id="outputArea" prefRowCount="16" editable="false" wrapText="false" />
+</VBox>
