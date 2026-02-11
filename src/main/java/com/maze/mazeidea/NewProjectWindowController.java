@@ -20,7 +20,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.prefs.Preferences;
-import java.util.stream.Collectors;
+import java.util.concurrent.TimeUnit;
 
 public class NewProjectWindowController {
     // Wizard pages
@@ -45,6 +45,9 @@ public class NewProjectWindowController {
     @FXML public TextField nodePathField;
     @FXML public Label ngCliLabel;
     @FXML public TextField ngCliField;
+    @FXML public TextField locationField;
+    @FXML public Button browseButton;
+    @FXML public Label targetPreviewLabel;
 
     // Dependencies page
     @FXML public TextField depSearch;
@@ -111,6 +114,44 @@ public class NewProjectWindowController {
         if (packagingChoice != null) {
             packagingChoice.getItems().addAll("jar","war");
             packagingChoice.getSelectionModel().select("jar");
+        }
+
+        // location default from prefs
+        try {
+            String last = prefs.get(PREF_LAST_DIR, System.getProperty("user.dir"));
+            if (locationField != null) locationField.setText(last);
+        } catch (Exception ignored) {}
+
+        // update preview when location or project name changes
+        Runnable updatePreview = () -> {
+            try {
+                String loc = (locationField != null && !locationField.getText().isBlank()) ? locationField.getText() : prefs.get(PREF_LAST_DIR, System.getProperty("user.dir"));
+                String name = (projectNameField != null && !projectNameField.getText().isBlank()) ? projectNameField.getText() : "my-project";
+                Path preview = Paths.get(loc).resolve(name);
+                if (targetPreviewLabel != null) targetPreviewLabel.setText("Target: " + preview.toAbsolutePath().toString());
+            } catch (Exception ignored) {}
+        };
+        if (locationField != null) locationField.textProperty().addListener((obs, o, n) -> updatePreview.run());
+        if (projectNameField != null) projectNameField.textProperty().addListener((obs, o, n) -> updatePreview.run());
+        updatePreview.run();
+
+        if (browseButton != null) {
+            browseButton.setOnAction(e -> {
+                javafx.stage.DirectoryChooser dc = new javafx.stage.DirectoryChooser();
+                dc.setTitle("Select Project Location");
+                java.io.File chosen = dc.showDialog(null);
+                if (chosen != null && chosen.exists() && chosen.isDirectory()) {
+                    if (locationField != null) {
+                        locationField.setText(chosen.getAbsolutePath());
+                        try { prefs.put(PREF_LAST_DIR, chosen.getAbsolutePath()); } catch (Exception ignored) {}
+                    }
+                }
+            });
+        }
+        if (locationField != null) {
+            locationField.textProperty().addListener((obs, oldV, newV) -> {
+                try { if (newV != null && !newV.isBlank()) prefs.put(PREF_LAST_DIR, newV); } catch (Exception ignored) {}
+            });
         }
 
         // dependency list wiring
@@ -265,9 +306,74 @@ public class NewProjectWindowController {
         if (pkg==null || pkg.isBlank()) pkg = group + "." + artifact;
 
         // prefer last-used directory as base
-        Path baseDir = Paths.get(prefs.get(PREF_LAST_DIR, System.getProperty("user.dir")));
+        Path baseDir;
+        try {
+            String loc = (locationField != null && !locationField.getText().isBlank()) ? locationField.getText() : prefs.get(PREF_LAST_DIR, System.getProperty("user.dir"));
+            baseDir = Paths.get(loc);
+        } catch (Exception ex) {
+            baseDir = Paths.get(System.getProperty("user.dir"));
+        }
         Path target = baseDir.resolve(name);
-         try {
+        // validate parent directory exists and is writable; if missing ask to create it
+        try {
+            Path parent = target.getParent();
+            if (parent == null) {
+                Platform.runLater(() -> {
+                    Alert a = new Alert(Alert.AlertType.ERROR, "Invalid target path: " + target.toString(), ButtonType.OK);
+                    a.setTitle("Invalid location"); a.showAndWait();
+                });
+                return;
+            }
+
+            if (!Files.exists(parent)) {
+                // Ask user to create the parent directory
+                boolean create = confirm("Create directory", "The parent directory '" + parent.toAbsolutePath().toString() + "' does not exist. Create it?");
+                if (create) {
+                    try {
+                        Files.createDirectories(parent);
+                    } catch (Exception ex) {
+                        Platform.runLater(() -> {
+                            Alert a = new Alert(Alert.AlertType.ERROR, "Failed to create directory: " + ex.getMessage(), ButtonType.OK);
+                            a.setTitle("Create failed"); a.showAndWait();
+                        });
+                        return;
+                    }
+                } else {
+                    return;
+                }
+            }
+
+            if (!Files.isWritable(parent)) {
+                Platform.runLater(() -> {
+                    Alert a = new Alert(Alert.AlertType.ERROR, "The selected location is not writable: " + parent.toAbsolutePath().toString(), ButtonType.OK);
+                    a.setTitle("Invalid location"); a.showAndWait();
+                });
+                return;
+            }
+
+        } catch (Exception ex) {
+            // ignore and proceed
+        }
+
+        // If target already exists, ask user whether to overwrite
+        if (Files.exists(target)) {
+            boolean ok = confirm("Target exists", "The target folder '" + target.toAbsolutePath().toString() + "' already exists. Overwrite its contents?");
+            if (!ok) return;
+            // delete existing tree under target
+            try (java.util.stream.Stream<Path> s = Files.walk(target)) {
+                s.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
+                    try { Files.deleteIfExists(p); } catch (Exception ignored) {}
+                });
+            } catch (Exception ex) {
+                Platform.runLater(() -> {
+                    Alert a = new Alert(Alert.AlertType.ERROR, "Failed to clear existing directory: " + ex.getMessage(), ButtonType.OK);
+                    a.setTitle("Error"); a.showAndWait();
+                });
+                return;
+            }
+        }
+
+        try {
              boolean web = isDepSelected("spring-boot-starter-web");
              boolean data = isDepSelected("spring-boot-starter-data-jpa");
              boolean sec = isDepSelected("spring-boot-starter-security");
@@ -311,48 +417,63 @@ public class NewProjectWindowController {
              }
 
              if (openNew) {
+                 // Try runnable jar first (if packaged) and verify startup
                  File jar = new File("target/mazeidea-1.0-SNAPSHOT.jar");
+                 boolean launched = false;
                  if (jar.exists()) {
-                     new ProcessBuilder("java","-jar",jar.getAbsolutePath(), target.toAbsolutePath().toString()).start();
-                 } else if (isCommandAvailable("mvn")) {
-                     // prefer using maven to run the app from classes/resources
-                     runCommandWithOutput(new String[]{"mvn","-DskipTests=false","javafx:run","-Dexec.args=\""+target.toAbsolutePath().toString()+"\""}, target.getParent());
-                 } else {
-                     // fallback: try to start a new JVM using same classpath if provided via system property
-                     String cp = System.getProperty("java.class.path");
-                     boolean launched = false;
-                     if (cp != null && !cp.isBlank()) {
-                         try {
+                     List<String> cmd = Arrays.asList("java", "-jar", jar.getAbsolutePath(), target.toAbsolutePath().toString());
+                     Process p = tryLaunchAndVerify(cmd, null, 8);
+                     launched = (p != null);
+                 }
+
+                 // Next try to run via mvnw (preferred) or mvn from the IDE project root
+                 if (!launched) {
+                     try {
+                         Path ideRoot = Paths.get(System.getProperty("user.dir"));
+                         String mvncmd = null;
+                         if (new File(ideRoot.toFile(), "mvnw").exists()) mvncmd = "./mvnw";
+                         else if (isCommandAvailable("mvn")) mvncmd = "mvn";
+                         if (mvncmd != null) {
+                             List<String> cmd = Arrays.asList(mvncmd, "javafx:run", "-Dexec.args=" + target.toAbsolutePath().toString());
+                             Process p = tryLaunchAndVerify(cmd, ideRoot, 10);
+                             launched = (p != null);
+                         }
+                     } catch (Exception ignored) {}
+                 }
+
+                 // Last fallback: launch using current classpath + Launcher main
+                 if (!launched) {
+                     try {
+                         String cp = System.getProperty("java.class.path");
+                         if (cp != null && !cp.isBlank()) {
                              List<String> cmd = new ArrayList<>();
                              cmd.add("java"); cmd.add("-cp"); cmd.add(cp); cmd.add("com.maze.mazeidea.Launcher"); cmd.add(target.toAbsolutePath().toString());
-                             new ProcessBuilder(cmd).inheritIO().start();
-                             launched = true;
-                         } catch (Exception ex) {
-                             launched = false;
+                             Process p = tryLaunchAndVerify(cmd, null, 8);
+                             launched = (p != null);
                          }
-                     }
+                     } catch (Exception ex) { launched = false; }
+                 }
 
-                     if (!launched) {
-                         // Ask user whether to open in current window instead
-                         final Path finalTarget = target;
-                         Platform.runLater(() -> {
-                             Alert a = new Alert(Alert.AlertType.CONFIRMATION,
-                                     "Can't open a new IDE window automatically because no launcher was found.\nWould you like to open the created project in the current window instead?",
-                                     ButtonType.YES, ButtonType.NO);
-                             a.setTitle("Open project");
-                             a.showAndWait().ifPresent(btn -> {
-                                 if (btn == ButtonType.YES) {
-                                     try {
-                                         WorkspaceManager.setWorkspace(finalTarget);
-                                         ServiceManager.switchWorkspace(finalTarget);
-                                     } catch (Exception ignored) {}
-                                 } else {
-                                     Alert info = new Alert(Alert.AlertType.INFORMATION, "Created project at: " + finalTarget.toAbsolutePath().toString(), ButtonType.OK);
-                                     info.setTitle("Project created"); info.showAndWait();
-                                 }
-                             });
+                 if (!launched) {
+                     // If verification failed, open in current window instead
+                     final Path finalTarget = target;
+                     Platform.runLater(() -> {
+                         Alert a = new Alert(Alert.AlertType.CONFIRMATION,
+                                 "Couldn't reliably start a new IDE window. Open the created project in the current window instead?",
+                                 ButtonType.YES, ButtonType.NO);
+                         a.setTitle("Open project");
+                         a.showAndWait().ifPresent(btn -> {
+                             if (btn == ButtonType.YES) {
+                                 try {
+                                     WorkspaceManager.setWorkspace(finalTarget);
+                                     ServiceManager.switchWorkspace(finalTarget);
+                                 } catch (Exception ignored) {}
+                             } else {
+                                 Alert info = new Alert(Alert.AlertType.INFORMATION, "Created project at: " + finalTarget.toAbsolutePath().toString(), ButtonType.OK);
+                                 info.setTitle("Project created"); info.showAndWait();
+                             }
                          });
-                     }
+                     });
                  }
              } else {
                  WorkspaceManager.setWorkspace(target);
@@ -369,12 +490,114 @@ public class NewProjectWindowController {
         return false;
     }
 
-    private boolean isCommandAvailable(String cmd) { try { ProcessBuilder pb=new ProcessBuilder(cmd,"--version"); pb.redirectErrorStream(true); Process p=pb.start(); p.getOutputStream().close(); int rc=p.waitFor(); return rc==0||rc==1; } catch (Exception e){return false;} }
+    private boolean isCommandAvailable(String cmd) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(cmd, "--version");
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            p.getOutputStream().close();
+            int rc = p.waitFor();
+            return rc == 0 || rc == 1;
+        } catch (Exception e) { return false; }
+    }
 
-    private boolean confirm(String title, String content) { Alert a=new Alert(Alert.AlertType.CONFIRMATION,content,ButtonType.YES,ButtonType.NO); a.setTitle(title); a.initModality(Modality.APPLICATION_MODAL); a.showAndWait(); return a.getResult()==ButtonType.YES; }
+    private boolean confirm(String title, String content) {
+        Alert a = new Alert(Alert.AlertType.CONFIRMATION, content, ButtonType.YES, ButtonType.NO);
+        a.setTitle(title);
+        a.initModality(Modality.APPLICATION_MODAL);
+        a.showAndWait();
+        return a.getResult() == ButtonType.YES;
+    }
 
     private void runCommandWithOutput(String[] command, Path workingDir) {
-        Stage stage=new Stage(); stage.initModality(Modality.APPLICATION_MODAL); stage.setTitle("Running: "+String.join(" ",command)); TextArea out=new TextArea(); out.setEditable(false); out.setWrapText(true); Scene scene=new Scene(out,600,400); stage.setScene(scene); stage.show(); new Thread(()->{ try{ ProcessBuilder pb=new ProcessBuilder(command); pb.directory(workingDir.toFile()); pb.redirectErrorStream(true); Process p=pb.start(); try(BufferedReader r=new BufferedReader(new InputStreamReader(p.getInputStream()))){ String line; while((line=r.readLine())!=null){ String l=line+System.lineSeparator(); Platform.runLater(()->out.appendText(l)); } } int exit=p.waitFor(); Platform.runLater(()->out.appendText("\nProcess exited with code: "+exit)); }catch(Exception ex){ Platform.runLater(()->out.appendText("\nError running command: "+ex.getMessage())); }},"project-installer").start(); }
+        Stage stage = new Stage();
+        stage.initModality(Modality.APPLICATION_MODAL);
+        stage.setTitle("Running: " + String.join(" ", command));
+        TextArea out = new TextArea(); out.setEditable(false); out.setWrapText(true);
+        Scene scene = new Scene(out, 600, 400);
+        stage.setScene(scene); stage.show();
+        new Thread(() -> {
+            try {
+                ProcessBuilder pb = new ProcessBuilder(command);
+                if (workingDir != null) pb.directory(workingDir.toFile());
+                pb.redirectErrorStream(true);
+                Process p = pb.start();
+                try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                    String line;
+                    while ((line = r.readLine()) != null) {
+                        String l = line + System.lineSeparator();
+                        Platform.runLater(() -> out.appendText(l));
+                    }
+                }
+                int exit = p.waitFor();
+                Platform.runLater(() -> out.appendText("\nProcess exited with code: " + exit));
+            } catch (Exception ex) {
+                Platform.runLater(() -> out.appendText("\nError running command: " + ex.getMessage()));
+            }
+        }, "project-installer").start();
+    }
 
-    public void open() { try { FXMLLoader loader=new FXMLLoader(getClass().getResource("new-project.fxml")); Scene scene=new Scene(loader.load()); Stage stage=new Stage(); stage.setTitle("New Project"); stage.setScene(scene); stage.show(); } catch (IOException e) { e.printStackTrace(); } }
+    /**
+     * Start a process, stream its output to a dialog, and verify the launch succeeded by ensuring
+     * the process is still alive after the given timeout (in seconds). If the process exits quickly
+     * (before the timeout) we treat the launch as failed.
+     * Returns the Process if started (may be alive) or null on immediate failure.
+     */
+    private Process tryLaunchAndVerify(List<String> cmd, Path workingDir, int verifySeconds) {
+        Stage stage = new Stage();
+        stage.initModality(Modality.APPLICATION_MODAL);
+        stage.setTitle("Launching: " + String.join(" ", cmd));
+        TextArea out = new TextArea(); out.setEditable(false); out.setWrapText(true);
+        Scene scene = new Scene(out, 700, 420);
+        stage.setScene(scene);
+        stage.show();
+
+        try {
+            ProcessBuilder pb = new ProcessBuilder(cmd);
+            if (workingDir != null) pb.directory(workingDir.toFile());
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+
+            // stream output
+            Thread reader = new Thread(() -> {
+                try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                    String line;
+                    while ((line = r.readLine()) != null) {
+                        String l = line + System.lineSeparator();
+                        Platform.runLater(() -> out.appendText(l));
+                    }
+                } catch (IOException ignored) {}
+            }, "launcher-output-reader");
+            reader.setDaemon(true);
+            reader.start();
+
+            // verify: wait verifySeconds; if process exits before that -> failure
+            boolean exited = p.waitFor(verifySeconds, TimeUnit.SECONDS);
+            if (exited) {
+                // read any remaining output
+                try { int rc = p.exitValue(); Platform.runLater(() -> out.appendText("\nProcess exited with code: " + rc)); } catch (Exception ignored) {}
+                try { p.destroyForcibly(); } catch (Exception ignored) {}
+                return null;
+            }
+
+            // process still alive after timeout -> assume successful startup
+            return p;
+        } catch (Exception e) {
+            Platform.runLater(() -> {
+                out.appendText("\nFailed to launch: " + e.getMessage());
+            });
+            return null;
+        }
+    }
+
+    public void open() {
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("new-project.fxml"));
+            Scene scene = new Scene(loader.load());
+            Stage stage = new Stage();
+            stage.setTitle("New Project");
+            stage.setScene(scene);
+            stage.show();
+        } catch (IOException e) { e.printStackTrace(); }
+    }
 }

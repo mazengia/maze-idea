@@ -66,7 +66,23 @@ public class ProjectGenerator {
             deps.append("    <dependency>\n      <groupId>org.springframework.boot</groupId>\n      <artifactId>spring-boot-starter-web</artifactId>\n    </dependency>\n");
         }
 
-        String pom = "<project xmlns=\"http://maven.apache.org/POM/4.0.0\">\n  <modelVersion>4.0.0</modelVersion>\n  <groupId>" + groupId + "</groupId>\n  <artifactId>" + artifactId + "</artifactId>\n  <version>" + version + "</version>\n  <packaging>" + packaging + "</packaging>\n  <parent>\n    <groupId>org.springframework.boot</groupId>\n    <artifactId>spring-boot-starter-parent</artifactId>\n    <version>3.1.0</version>\n  </parent>\n  <properties>\n    <java.version>" + javaVersion + "</java.version>\n  </properties>\n  <dependencies>\n" + deps.toString() + "  </dependencies>\n</project>";
+        String pom = "<project xmlns=\"http://maven.apache.org/POM/4.0.0\">\n  <modelVersion>4.0.0</modelVersion>\n  <groupId>" + groupId + "</groupId>\n  <artifactId>" + artifactId + "</artifactId>\n  <version>" + version + "</version>\n  <packaging>" + packaging + "</packaging>\n  <parent>\n    <groupId>org.springframework.boot</groupId>\n    <artifactId>spring-boot-starter-parent</artifactId>\n    <version>3.1.0</version>\n  </parent>\n  <properties>\n    <java.version>" + javaVersion + "</java.version>\n  </properties>\n  <dependencies>\n" + deps.toString() + "  </dependencies>\n" +
+                "  <repositories>\n" +
+                "    <repository>\n" +
+                "      <id>central</id>\n" +
+                "      <url>https://repo1.maven.org/maven2</url>\n" +
+                "    </repository>\n" +
+                "  </repositories>\n" +
+                "  <build>\n" +
+                "    <plugins>\n" +
+                "      <plugin>\n" +
+                "        <groupId>org.springframework.boot</groupId>\n" +
+                "        <artifactId>spring-boot-maven-plugin</artifactId>\n" +
+                "        <version>3.1.0</version>\n" +
+                "      </plugin>\n" +
+                "    </plugins>\n" +
+                "  </build>\n" +
+                 "</project>";
         Path p = dir.resolve("pom.xml");
         Files.writeString(p, pom, StandardCharsets.UTF_8);
         created.add(p);

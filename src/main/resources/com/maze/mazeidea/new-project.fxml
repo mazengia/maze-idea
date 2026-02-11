@@ -61,6 +61,13 @@
                 <Label text="Packaging:" GridPane.rowIndex="5" GridPane.columnIndex="0" />
                 <ChoiceBox fx:id="packagingChoice" GridPane.rowIndex="5" GridPane.columnIndex="1" />
 
+                <Label text="Location:" GridPane.rowIndex="8" GridPane.columnIndex="0" />
+                <HBox GridPane.rowIndex="8" GridPane.columnIndex="1" spacing="6">
+                    <TextField fx:id="locationField" HBox.hgrow="ALWAYS" />
+                    <Button fx:id="browseButton" text="Browse..." />
+                </HBox>
+                <Label fx:id="targetPreviewLabel" text="Target: " GridPane.rowIndex="9" GridPane.columnIndex="1" />
+
                 <!-- Angular/React specific -->
                 <Label text="Node Path:" fx:id="nodePathLabel" GridPane.rowIndex="6" GridPane.columnIndex="0" visible="false" managed="false" />
                 <TextField fx:id="nodePathField" GridPane.rowIndex="6" GridPane.columnIndex="1" visible="false" managed="false" />

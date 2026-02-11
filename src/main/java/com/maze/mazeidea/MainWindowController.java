@@ -76,11 +76,21 @@ public class MainWindowController {
             @Override
             protected void updateItem(java.nio.file.Path item, boolean empty) {
                 super.updateItem(item, empty);
-                if (empty || item == null) {
-                    setText(empty ? null : "Workspace");
+                if (empty) {
+                    setText(null);
+                    setGraphic(null);
+                } else if (item == null) {
+                    setText("Workspace");
+                    setGraphic(createIconNode(null, IconKind.WORKSPACE));
                 } else {
                     java.nio.file.Path fn = item.getFileName();
                     setText(fn != null ? fn.toString() : item.toString());
+                    IconKind kind = IconKind.FILE;
+                    try {
+                        if (java.nio.file.Files.isDirectory(item)) kind = IconKind.FOLDER;
+                        else if (fn != null && "pom.xml".equalsIgnoreCase(fn.toString())) kind = IconKind.POM;
+                    } catch (Exception ignored) {}
+                    setGraphic(createIconNode(item, kind));
                 }
             }
         });
@@ -88,8 +98,18 @@ public class MainWindowController {
         projectTree.setOnMouseClicked(ev -> {
             if (ev.getClickCount() == 2) {
                 TreeItem<java.nio.file.Path> sel = projectTree.getSelectionModel().getSelectedItem();
-                if (sel != null && sel.isLeaf() && sel.getValue() != null) {
-                    openFileInEditor(sel.getValue());
+                if (sel != null && sel.getValue() != null) {
+                    Path val = sel.getValue();
+                    try {
+                        if (java.nio.file.Files.isDirectory(val)) {
+                            sel.setExpanded(!sel.isExpanded());
+                        } else {
+                            openFileInEditor(val);
+                        }
+                    } catch (Exception ex) {
+                        // fallback: open as file
+                        openFileInEditor(val);
+                    }
                 }
             }
         });
@@ -107,37 +127,57 @@ public class MainWindowController {
         });
     }
 
+    private TreeItem<Path> createNode(Path file) {
+        TreeItem<Path> item = new TreeItem<>(file);
+        if (file != null && java.nio.file.Files.isDirectory(file)) {
+            // placeholder child so the node shows expandable arrow
+            item.getChildren().add(new TreeItem<>(null));
+            item.expandedProperty().addListener((obs, was, isNow) -> {
+                if (isNow) {
+                    // populate on first expansion (placeholder check)
+                    if (item.getChildren().size() == 1 && item.getChildren().get(0).getValue() == null) {
+                        item.getChildren().clear();
+                        try {
+                            java.util.List<Path> kids = new java.util.ArrayList<>();
+                            try (java.util.stream.Stream<Path> s = java.nio.file.Files.list(file)) {
+                                s.sorted().forEach(kids::add);
+                            }
+                            for (Path k : kids) item.getChildren().add(createNode(k));
+                        } catch (Exception ignored) {}
+                    }
+                }
+            });
+        }
+        return item;
+    }
+
     private void refreshProjectTree(Path root) {
         projectTree.getRoot().getChildren().clear();
         if (root == null) return;
         try {
             com.maze.mazeidea.project.ProjectImporter importer = new com.maze.mazeidea.project.ProjectImporter();
             com.maze.mazeidea.project.ProjectModel model = importer.importProjectModel(root);
-            TreeItem<java.nio.file.Path> proj = new TreeItem<>(root);
-            // show pom
+            // create tree with lazy children
+            TreeItem<Path> proj = createNode(root);
+            // ensure top-level pom, modules, and source roots are visible quickly by expanding project node and adding those children
+            proj.setExpanded(true);
+            // eagerly add pom if present
             if (root.resolve("pom.xml").toFile().exists()) {
-                TreeItem<java.nio.file.Path> pom = new TreeItem<>(root.resolve("pom.xml"));
-                proj.getChildren().add(pom);
+                proj.getChildren().add(new TreeItem<>(root.resolve("pom.xml")));
             }
-            // modules
-            for (String m : model.getModules()) {
-                TreeItem<java.nio.file.Path> mod = new TreeItem<>(root.resolve(m));
-                proj.getChildren().add(mod);
-            }
-            // source roots
-            for (java.nio.file.Path sr : model.getSourceRoots()) {
-                TreeItem<java.nio.file.Path> s = new TreeItem<>(sr);
-                proj.getChildren().add(s);
-            }
+            for (String m : model.getModules()) proj.getChildren().add(createNode(root.resolve(m)));
+            for (Path sr : model.getSourceRoots()) proj.getChildren().add(createNode(sr));
             projectTree.getRoot().getChildren().add(proj);
          } catch (Exception e) {
              // fallback: show user.dir
              try {
                  Path cwd = Path.of(System.getProperty("user.dir"));
-                Files.list(cwd).limit(200).forEach(p -> projectTree.getRoot().getChildren().add(new TreeItem<>(p)));
+                try (java.util.stream.Stream<Path> s = Files.list(cwd)) {
+                    s.limit(200).sorted().forEach(p -> projectTree.getRoot().getChildren().add(createNode(p)));
+                }
              } catch (IOException ignored) {}
          }
-    }
+     }
 
     private void openFileInEditor(Path filePath) {
         final String tabName = (filePath.getFileName() != null) ? filePath.getFileName().toString() : filePath.toString();
@@ -433,4 +473,48 @@ public class MainWindowController {
         System.exit(0);
     }
 
+    // simple icon kinds to decide icon glyph
+    private enum IconKind { FOLDER, FILE, POM, WORKSPACE }
+
+    // Create a Node to use as icon. Try to use Ikonli FontIcon via reflection; fall back to an emoji Label.
+    private javafx.scene.Node createIconNode(Path p, IconKind kind) {
+        String code;
+        switch (kind) {
+            case FOLDER: code = "mdi2f-folder"; break;
+            case POM: code = "mdi2f-file-xml"; break;
+            case WORKSPACE: code = "mdi2f-view-dashboard"; break;
+            case FILE:
+            default: code = "mdi2f-file"; break;
+        }
+
+        // Attempt Ikonli FontIcon via reflection to avoid hard compile dependency
+        try {
+            Class<?> fontIconClass = Class.forName("org.kordamp.ikonli.javafx.FontIcon");
+            java.lang.reflect.Constructor<?> ctor = fontIconClass.getConstructor(String.class);
+            Object fontIcon = ctor.newInstance(code);
+            if (fontIcon instanceof javafx.scene.Node) {
+                // apply a small size if possible
+                try {
+                    java.lang.reflect.Method setIconSize = fontIconClass.getMethod("setIconSize", int.class);
+                    setIconSize.invoke(fontIcon, 14);
+                } catch (Exception ignored) {}
+                return (javafx.scene.Node) fontIcon;
+            }
+        } catch (Throwable ignored) {
+            // fallback to emoji
+        }
+
+        String emoji;
+        switch (kind) {
+            case FOLDER: emoji = "📁"; break;
+            case POM: emoji = "📦"; break;
+            case WORKSPACE: emoji = "🗂️"; break;
+            default: emoji = "📄"; break;
+        }
+        Label l = new Label(emoji);
+        l.setMinWidth(18);
+        l.setMaxWidth(18);
+        l.setStyle("-fx-font-size:12px;");
+        return l;
+    }
 }
