@@ -113,18 +113,27 @@
                             <Button fx:id="installNodeButton" text="Download" />
                         </HBox>
                         <Label fx:id="nodeStatusLabel" text="Node: not detected" GridPane.rowIndex="1" GridPane.columnIndex="1" />
+                    </GridPane>
+                </VBox>
 
-                        <Label text="Angular CLI:" fx:id="ngCliLabel" GridPane.rowIndex="2" GridPane.columnIndex="0" />
-                        <HBox GridPane.rowIndex="2" GridPane.columnIndex="1" spacing="6">
+                <VBox fx:id="angularSection" spacing="8">
+                    <Label text="Angular" styleClass="section-title" />
+                    <GridPane hgap="10" vgap="10">
+                        <columnConstraints>
+                            <ColumnConstraints halignment="RIGHT" minWidth="120" />
+                            <ColumnConstraints hgrow="ALWAYS" />
+                        </columnConstraints>
+                        <Label text="Angular CLI:" fx:id="ngCliLabel" GridPane.rowIndex="0" GridPane.columnIndex="0" />
+                        <HBox GridPane.rowIndex="0" GridPane.columnIndex="1" spacing="6">
                             <TextField fx:id="ngCliField" HBox.hgrow="ALWAYS" />
                             <Button fx:id="detectNgButton" text="Auto-detect" />
                             <Button fx:id="installNgButton" text="Download" />
                         </HBox>
-                        <Label fx:id="ngCliStatusLabel" text="Angular CLI: not detected" GridPane.rowIndex="3" GridPane.columnIndex="1" />
+                        <Label fx:id="ngCliStatusLabel" text="Angular CLI: not detected" GridPane.rowIndex="1" GridPane.columnIndex="1" />
 
-                        <Label text="Additional parameters:" fx:id="additionalParamsLabel" GridPane.rowIndex="4" GridPane.columnIndex="0" />
-                        <TextField fx:id="additionalParamsField" GridPane.rowIndex="4" GridPane.columnIndex="1" />
-                        <VBox fx:id="angularOptionsBox" spacing="6" GridPane.rowIndex="5" GridPane.columnIndex="1">
+                        <Label text="Additional parameters:" fx:id="additionalParamsLabel" GridPane.rowIndex="2" GridPane.columnIndex="0" />
+                        <TextField fx:id="additionalParamsField" GridPane.rowIndex="2" GridPane.columnIndex="1" />
+                        <VBox fx:id="angularOptionsBox" spacing="6" GridPane.rowIndex="3" GridPane.columnIndex="1">
                             <CheckBox fx:id="angularStandaloneCheck" text="Create new project with standalone components" />
                             <CheckBox fx:id="angularDefaultSetupCheck" text="Use the default project setup" />
                         </VBox>

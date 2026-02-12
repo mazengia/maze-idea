@@ -66,6 +66,7 @@ public class NewProjectWindowController {
     @FXML public VBox angularOptionsBox;
     @FXML public CheckBox angularStandaloneCheck;
     @FXML public CheckBox angularDefaultSetupCheck;
+    @FXML public VBox angularSection;
     @FXML public VBox reactSection;
     @FXML public ChoiceBox<String> reactTypeChoice;
     @FXML public TextField reactCraField;
@@ -285,6 +286,7 @@ public class NewProjectWindowController {
                 if (packagingChoice!=null) packagingChoice.getSelectionModel().select("jar");
                 if (springSection != null) { springSection.setVisible(true); springSection.setManaged(true); }
                 if (nodeSection != null) { nodeSection.setVisible(false); nodeSection.setManaged(false); }
+                if (angularSection != null) { angularSection.setVisible(false); angularSection.setManaged(false); }
                 if (reactSection != null) { reactSection.setVisible(false); reactSection.setManaged(false); }
                 setAngularExtrasVisible(false);
                 populateDependenciesFor(t);
@@ -294,10 +296,8 @@ public class NewProjectWindowController {
                 projectNameField.setText("react-app");
                 if (springSection != null) { springSection.setVisible(false); springSection.setManaged(false); }
                 if (nodeSection != null) { nodeSection.setVisible(true); nodeSection.setManaged(true); }
+                if (angularSection != null) { angularSection.setVisible(false); angularSection.setManaged(false); }
                 if (reactSection != null) { reactSection.setVisible(true); reactSection.setManaged(true); }
-                if (ngCliLabel!=null) { ngCliLabel.setVisible(false); ngCliLabel.setManaged(false); }
-                if (ngCliField!=null) { ngCliField.setVisible(false); ngCliField.setManaged(false); }
-                if (ngCliStatusLabel!=null) { ngCliStatusLabel.setVisible(false); ngCliStatusLabel.setManaged(false); }
                 setAngularExtrasVisible(false);
                 autoDetectCreateReactApp();
                 autoDetectNodeAndCli(false, true);
@@ -307,10 +307,8 @@ public class NewProjectWindowController {
                 projectNameField.setText("angular-app");
                 if (springSection != null) { springSection.setVisible(false); springSection.setManaged(false); }
                 if (nodeSection != null) { nodeSection.setVisible(true); nodeSection.setManaged(true); }
+                if (angularSection != null) { angularSection.setVisible(true); angularSection.setManaged(true); }
                 if (reactSection != null) { reactSection.setVisible(false); reactSection.setManaged(false); }
-                if (ngCliLabel!=null) { ngCliLabel.setVisible(true); ngCliLabel.setManaged(true); }
-                if (ngCliField!=null) { ngCliField.setVisible(true); ngCliField.setManaged(true); }
-                if (ngCliStatusLabel!=null) { ngCliStatusLabel.setVisible(true); ngCliStatusLabel.setManaged(true); }
                 setAngularExtrasVisible(true);
                 autoDetectNodeAndCli(true, true);
                 break;
