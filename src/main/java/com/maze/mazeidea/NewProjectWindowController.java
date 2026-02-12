@@ -30,9 +30,24 @@ public class NewProjectWindowController {
     @FXML public Node detailsPage;
 
     // Template page controls
+    @FXML public Button chooseJavaBtn;
+    @FXML public Button chooseKotlinBtn;
+    @FXML public Button chooseGroovyBtn;
+    @FXML public Button chooseEmptyBtn;
+    @FXML public Button chooseMavenArchetypeBtn;
+    @FXML public Button chooseJavaFxBtn;
     @FXML public Button chooseSpringBtn;
+    @FXML public Button chooseQuarkusBtn;
+    @FXML public Button chooseMicronautBtn;
+    @FXML public Button chooseJakartaBtn;
+    @FXML public Button chooseKtorBtn;
+    @FXML public Button chooseHtmlBtn;
     @FXML public Button chooseReactBtn;
+    @FXML public Button chooseExpressBtn;
     @FXML public Button chooseAngularBtn;
+    @FXML public Button chooseVueBtn;
+    @FXML public Button chooseViteBtn;
+    @FXML public Button chooseNuxtBtn;
 
     // Details page
     @FXML public TextField projectNameField;
@@ -41,6 +56,8 @@ public class NewProjectWindowController {
     @FXML public ChoiceBox<String> languageChoice;
     @FXML public ChoiceBox<String> typeChoice;
     @FXML public CheckBox createGitCheck;
+    @FXML public javafx.scene.Node commonSection;
+    @FXML public VBox springMetaSection;
     @FXML public TextField groupIdField;
     @FXML public Label groupIdLabel;
     @FXML public TextField artifactIdField;
@@ -104,6 +121,7 @@ public class NewProjectWindowController {
 
     private final ObservableList<CheckBox> allDeps = FXCollections.observableArrayList();
     private FilteredList<CheckBox> filteredDeps;
+    private final List<Button> navButtons = new ArrayList<>();
 
     private int step = 0; // 0 template,1 details
 
@@ -120,9 +138,36 @@ public class NewProjectWindowController {
         if (openReplace != null) openReplace.setToggleGroup(openModeGroup);
 
         // Setup wizard navigation
-        if (chooseSpringBtn != null) chooseSpringBtn.setOnAction(e -> { selectedTemplate = Template.SPRING; prefs.put(PREF_LAST_TEMPLATE, "SPRING"); showDetailsFor(Template.SPRING); });
-        if (chooseReactBtn != null) chooseReactBtn.setOnAction(e -> { selectedTemplate = Template.REACT; prefs.put(PREF_LAST_TEMPLATE, "REACT"); showDetailsFor(Template.REACT); });
-        if (chooseAngularBtn != null) chooseAngularBtn.setOnAction(e -> { selectedTemplate = Template.ANGULAR; prefs.put(PREF_LAST_TEMPLATE, "ANGULAR"); showDetailsFor(Template.ANGULAR); });
+        registerNavButton(chooseJavaBtn, () -> showNotImplemented("Java"));
+        registerNavButton(chooseKotlinBtn, () -> showNotImplemented("Kotlin"));
+        registerNavButton(chooseGroovyBtn, () -> showNotImplemented("Groovy"));
+        registerNavButton(chooseEmptyBtn, () -> showNotImplemented("Empty Project"));
+        registerNavButton(chooseMavenArchetypeBtn, () -> showNotImplemented("Maven Archetype"));
+        registerNavButton(chooseJavaFxBtn, () -> showNotImplemented("JavaFX"));
+        registerNavButton(chooseQuarkusBtn, () -> showNotImplemented("Quarkus"));
+        registerNavButton(chooseMicronautBtn, () -> showNotImplemented("Micronaut"));
+        registerNavButton(chooseJakartaBtn, () -> showNotImplemented("Jakarta EE"));
+        registerNavButton(chooseKtorBtn, () -> showNotImplemented("Ktor"));
+        registerNavButton(chooseHtmlBtn, () -> showNotImplemented("HTML"));
+        registerNavButton(chooseExpressBtn, () -> showNotImplemented("Express"));
+        registerNavButton(chooseVueBtn, () -> showNotImplemented("Vue.js"));
+        registerNavButton(chooseViteBtn, () -> showNotImplemented("Vite"));
+        registerNavButton(chooseNuxtBtn, () -> showNotImplemented("Nuxt"));
+        registerNavButton(chooseSpringBtn, () -> {
+            selectedTemplate = Template.SPRING;
+            prefs.put(PREF_LAST_TEMPLATE, "SPRING");
+            showDetailsFor(Template.SPRING);
+        });
+        registerNavButton(chooseReactBtn, () -> {
+            selectedTemplate = Template.REACT;
+            prefs.put(PREF_LAST_TEMPLATE, "REACT");
+            showDetailsFor(Template.REACT);
+        });
+        registerNavButton(chooseAngularBtn, () -> {
+            selectedTemplate = Template.ANGULAR;
+            prefs.put(PREF_LAST_TEMPLATE, "ANGULAR");
+            showDetailsFor(Template.ANGULAR);
+        });
 
         if (backButton != null) backButton.setOnAction(e -> back());
         if (nextButton != null) nextButton.setOnAction(e -> next());
@@ -274,7 +319,7 @@ public class NewProjectWindowController {
     private void showDetailsFor(Template t) {
         // preset some defaults
         if (projectNameField==null) return;
-        highlightTemplate(t);
+        selectNavForTemplate(t);
         if (summaryTemplateLabel != null) summaryTemplateLabel.setText("Template: " + prettyTemplateName(t));
         switch (t) {
             case SPRING: {
@@ -288,6 +333,7 @@ public class NewProjectWindowController {
                 if (nodeSection != null) { nodeSection.setVisible(false); nodeSection.setManaged(false); }
                 if (angularSection != null) { angularSection.setVisible(false); angularSection.setManaged(false); }
                 if (reactSection != null) { reactSection.setVisible(false); reactSection.setManaged(false); }
+                setSpringMetaVisible(true);
                 setAngularExtrasVisible(false);
                 populateDependenciesFor(t);
                 break;
@@ -298,6 +344,7 @@ public class NewProjectWindowController {
                 if (nodeSection != null) { nodeSection.setVisible(true); nodeSection.setManaged(true); }
                 if (angularSection != null) { angularSection.setVisible(false); angularSection.setManaged(false); }
                 if (reactSection != null) { reactSection.setVisible(true); reactSection.setManaged(true); }
+                setSpringMetaVisible(false);
                 setAngularExtrasVisible(false);
                 autoDetectCreateReactApp();
                 autoDetectNodeAndCli(false, true);
@@ -309,6 +356,7 @@ public class NewProjectWindowController {
                 if (nodeSection != null) { nodeSection.setVisible(true); nodeSection.setManaged(true); }
                 if (angularSection != null) { angularSection.setVisible(true); angularSection.setManaged(true); }
                 if (reactSection != null) { reactSection.setVisible(false); reactSection.setManaged(false); }
+                setSpringMetaVisible(false);
                 setAngularExtrasVisible(true);
                 autoDetectNodeAndCli(true, true);
                 break;
@@ -330,9 +378,7 @@ public class NewProjectWindowController {
     }
 
     private void highlightTemplate(Template t) {
-        setTemplateSelected(chooseSpringBtn, t == Template.SPRING);
-        setTemplateSelected(chooseReactBtn, t == Template.REACT);
-        setTemplateSelected(chooseAngularBtn, t == Template.ANGULAR);
+        selectNavForTemplate(t);
     }
 
     private void setTemplateSelected(Button button, boolean selected) {
@@ -346,10 +392,48 @@ public class NewProjectWindowController {
         }
     }
 
+    private void registerNavButton(Button button, Runnable action) {
+        if (button == null) return;
+        navButtons.add(button);
+        button.setOnAction(e -> {
+            selectNavButton(button);
+            action.run();
+        });
+    }
+
+    private void selectNavForTemplate(Template t) {
+        if (t == Template.SPRING) selectNavButton(chooseSpringBtn);
+        else if (t == Template.REACT) selectNavButton(chooseReactBtn);
+        else if (t == Template.ANGULAR) selectNavButton(chooseAngularBtn);
+    }
+
+    private void selectNavButton(Button selected) {
+        for (Button b : navButtons) {
+            if (b == null) continue;
+            if (b == selected) {
+                if (!b.getStyleClass().contains("wizard-nav-item-selected")) {
+                    b.getStyleClass().add("wizard-nav-item-selected");
+                }
+            } else {
+                b.getStyleClass().remove("wizard-nav-item-selected");
+            }
+        }
+    }
+
+    private void showNotImplemented(String name) {
+        Alert a = new Alert(Alert.AlertType.INFORMATION, name + " project template is not implemented yet.", ButtonType.OK);
+        a.setTitle("Template not available");
+        a.showAndWait();
+    }
+
     private void setAngularExtrasVisible(boolean visible) {
         if (additionalParamsLabel != null) { additionalParamsLabel.setVisible(visible); additionalParamsLabel.setManaged(visible); }
         if (additionalParamsField != null) { additionalParamsField.setVisible(visible); additionalParamsField.setManaged(visible); }
         if (angularOptionsBox != null) { angularOptionsBox.setVisible(visible); angularOptionsBox.setManaged(visible); }
+    }
+
+    private void setSpringMetaVisible(boolean visible) {
+        if (springMetaSection != null) { springMetaSection.setVisible(visible); springMetaSection.setManaged(visible); }
     }
 
     private void autoDetectCreateReactApp() {
