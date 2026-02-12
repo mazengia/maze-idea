@@ -47,19 +47,9 @@ public class FileWatcherService {
     private void runLoop() {
         try (WatchService ws = FileSystems.getDefault().newWatchService()) {
             this.watchService = ws;
-            // register root and its subdirectories (one level deep for simplicity)
             try {
-                Files.walk(root)
-                        .filter(Files::isDirectory)
-                        .forEach(dir -> {
-                            try {
-                                dir.register(ws, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_MODIFY, StandardWatchEventKinds.ENTRY_DELETE);
-                            } catch (IOException e) {
-                                // ignore registration failures for now
-                            }
-                        });
-            } catch (IOException e) {
-                // ignore walk failures
+                registerAll(root, ws);
+            } catch (Exception ignored) {
             } finally {
                 readyLatch.countDown();
             }
@@ -86,6 +76,12 @@ public class FileWatcherService {
                     else if (kind == StandardWatchEventKinds.ENTRY_MODIFY) type = FileEvent.EventType.MODIFY;
                     else type = FileEvent.EventType.DELETE;
 
+                    if (kind == StandardWatchEventKinds.ENTRY_CREATE) {
+                        try {
+                            if (Files.isDirectory(full)) registerAll(full, ws);
+                        } catch (Exception ignored) {}
+                    }
+
                     FileEvent fe = new FileEvent(full, type, System.currentTimeMillis());
                     for (Consumer<FileEvent> l : listeners) {
                         try { l.accept(fe); } catch (Exception ignore) {}
@@ -98,6 +94,20 @@ public class FileWatcherService {
         } catch (IOException e) {
             // log and exit
             readyLatch.countDown();
+        }
+    }
+
+    private void registerAll(Path start, WatchService ws) throws IOException {
+        if (start == null || !Files.exists(start)) return;
+        Files.walk(start)
+                .filter(Files::isDirectory)
+                .forEach(dir -> registerDir(dir, ws));
+    }
+
+    private void registerDir(Path dir, WatchService ws) {
+        try {
+            dir.register(ws, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_MODIFY, StandardWatchEventKinds.ENTRY_DELETE);
+        } catch (IOException ignored) {
         }
     }
 }

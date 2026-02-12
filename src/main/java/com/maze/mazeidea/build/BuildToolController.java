@@ -4,6 +4,7 @@ import com.maze.mazeidea.WorkspaceManager;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
+import javafx.stage.Window;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -36,6 +37,15 @@ public class BuildToolController {
         if (cleanButton != null) cleanButton.setOnAction(e -> runTasks("clean"));
         if (buildButton != null) buildButton.setOnAction(e -> runTasks(defaultBuildTask()));
         if (testButton != null) testButton.setOnAction(e -> runTasks(defaultTestTask()));
+        if (outputArea != null) {
+            outputArea.sceneProperty().addListener((obs, oldScene, newScene) -> {
+                if (newScene != null) {
+                    newScene.windowProperty().addListener((wObs, oldW, newW) -> {
+                        if (newW != null) newW.setOnHidden(e -> shutdownExecutor());
+                    });
+                }
+            });
+        }
     }
 
     private String detectDefaultTool() {
@@ -118,5 +128,9 @@ public class BuildToolController {
         Platform.runLater(() -> {
             if (outputArea != null) outputArea.appendText(line + System.lineSeparator());
         });
+    }
+
+    private void shutdownExecutor() {
+        try { executor.shutdownNow(); } catch (Exception ignored) {}
     }
 }

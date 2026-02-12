@@ -4,6 +4,7 @@ import com.maze.mazeidea.WorkspaceManager;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
+import javafx.stage.Window;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -33,6 +34,15 @@ public class GitToolController {
             });
         }
         refreshStatus();
+        if (diffArea != null) {
+            diffArea.sceneProperty().addListener((obs, oldScene, newScene) -> {
+                if (newScene != null) {
+                    newScene.windowProperty().addListener((wObs, oldW, newW) -> {
+                        if (newW != null) newW.setOnHidden(e -> shutdownExecutor());
+                    });
+                }
+            });
+        }
     }
 
     private void refreshStatus() {
@@ -110,5 +120,9 @@ public class GitToolController {
         Platform.runLater(() -> {
             if (commitStatus != null) commitStatus.setText(text);
         });
+    }
+
+    private void shutdownExecutor() {
+        try { executor.shutdownNow(); } catch (Exception ignored) {}
     }
 }

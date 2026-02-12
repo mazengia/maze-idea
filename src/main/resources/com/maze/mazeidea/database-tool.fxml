@@ -42,8 +42,8 @@
     <HBox spacing="8">
         <Button fx:id="connectButton" text="Connect" styleClass="primary-action"/>
         <Button fx:id="disconnectButton" text="Disconnect"/>
-        <Label fx:id="statusLabel" text="Not connected" />
     </HBox>
+    <TextArea fx:id="statusLabel" text="Not connected" editable="false" focusTraversable="false" wrapText="true" prefRowCount="2" minHeight="48" maxHeight="1.7976931348623157E308" VBox.vgrow="ALWAYS"/>
 
     <Label text="Tables" styleClass="section-title"/>
     <ListView fx:id="tablesList" prefHeight="120"/>

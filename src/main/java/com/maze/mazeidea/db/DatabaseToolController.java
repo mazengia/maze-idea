@@ -21,7 +21,7 @@ public class DatabaseToolController {
     @FXML private TextField driverField;
     @FXML private Button connectButton;
     @FXML private Button disconnectButton;
-    @FXML private Label statusLabel;
+    @FXML private TextArea statusLabel;
     @FXML private ListView<String> tablesList;
     @FXML private TextArea queryArea;
     @FXML private Button runQueryButton;
@@ -144,7 +144,7 @@ public class DatabaseToolController {
     }
 
     private void setDefaultPort(String value) {
-        if (portField != null && (portField.getText() == null || portField.getText().isBlank())) {
+        if (portField != null) {
             portField.setText(value);
         }
     }
@@ -175,6 +175,7 @@ public class DatabaseToolController {
         String pass = passwordField != null ? passwordField.getText() : "";
         String driver = driverField != null ? driverField.getText() : "";
 
+        updateStatus("Connecting to " + url.trim() + " ...");
         dbExecutor.submit(() -> {
             try {
                 if (driver != null && !driver.isBlank()) {
@@ -182,10 +183,11 @@ public class DatabaseToolController {
                 }
                 Connection conn = DriverManager.getConnection(url.trim(), user, pass);
                 connection = conn;
-                Platform.runLater(() -> updateStatus("Connected"));
+                String details = buildConnectionDetails(conn, url.trim(), user);
+                Platform.runLater(() -> updateStatus(details));
                 loadTables();
             } catch (Exception ex) {
-                Platform.runLater(() -> updateStatus("Connect failed: " + ex.getMessage()));
+                Platform.runLater(() -> updateStatus("Connect failed for " + url.trim() + ": " + ex.getMessage()));
             }
         });
     }
@@ -198,7 +200,7 @@ public class DatabaseToolController {
             connection = null;
             Platform.runLater(() -> {
                 if (tablesList != null) tablesList.getItems().clear();
-                updateStatus("Not connected");
+                updateStatus("Disconnected");
             });
         });
     }
@@ -297,5 +299,20 @@ public class DatabaseToolController {
 
     private void updateQueryStatus(String text) {
         if (queryStatusLabel != null) queryStatusLabel.setText(text);
+    }
+
+    private String buildConnectionDetails(Connection conn, String url, String user) {
+        String product = "database";
+        String version = "";
+        try {
+            DatabaseMetaData meta = conn.getMetaData();
+            if (meta != null) {
+                if (meta.getDatabaseProductName() != null) product = meta.getDatabaseProductName();
+                if (meta.getDatabaseProductVersion() != null) version = " " + meta.getDatabaseProductVersion();
+            }
+        } catch (SQLException ignored) {
+        }
+        String userPart = (user == null || user.isBlank()) ? "" : " as " + user;
+        return "Connected to " + product + version + " at " + url + userPart;
     }
 }

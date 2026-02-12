@@ -15,8 +15,13 @@ import javafx.scene.layout.VBox;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.BorderPane;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
+import javafx.animation.TranslateTransition;
+import javafx.util.Duration;
+import org.kordamp.ikonli.javafx.FontIcon;
 import org.fxmisc.richtext.CodeArea;
 import org.fxmisc.richtext.LineNumberFactory;
 import org.fxmisc.richtext.model.StyleSpans;
@@ -42,8 +47,14 @@ import java.util.regex.Pattern;
 public class MainWindowController {
     @FXML public TreeView<java.nio.file.Path> projectTree;
     @FXML public TabPane editorTabs;
+    @FXML public StackPane centerStack;
+    @FXML public BorderPane drawerPane;
+    @FXML public Label drawerTitle;
+    @FXML public Button drawerCloseButton;
+    @FXML public VBox projectPane;
     @FXML public ListView<String> toolList;
     @FXML public Label statusLabel;
+    @FXML public Label healthStatusLabel;
     @FXML public MenuItem menuNewProject;
     @FXML public TabPane toolTabs;
     @FXML public Button toolProjectButton;
@@ -61,6 +72,10 @@ public class MainWindowController {
     private final Preferences prefs = Preferences.userNodeForPackage(MainWindowController.class);
     private final List<RunConfig> runConfigs = new ArrayList<>();
     private boolean runConfigListenerAdded = false;
+    private boolean drawerOpen = false;
+    private TranslateTransition drawerTransition;
+    private boolean projectOpen = true;
+    private TranslateTransition projectTransition;
 
     private static final String PREF_RUN_COUNT = "run.config.count";
     private static final String PREF_RUN_SELECTED = "run.config.selected";
@@ -95,6 +110,8 @@ public class MainWindowController {
     public void initialize() {
         toolList.getItems().addAll("Search", "Git", "Problems");
         loadRunConfigs();
+        setupDrawer();
+        updateProjectHealth(WorkspaceManager.getWorkspaceRoot());
 
         TreeItem<java.nio.file.Path> rootNode = new TreeItem<>(null);
         projectTree.setRoot(rootNode);
@@ -153,6 +170,7 @@ public class MainWindowController {
                 statusLabel.setText("Workspace switched to: " + (root != null ? root.toString() : "(none)"));
                 refreshProjectTree(root);
                 refreshRunConfigsForWorkspace(root);
+                updateProjectHealth(root);
             });
         });
     }
@@ -191,12 +209,12 @@ public class MainWindowController {
             TreeItem<Path> proj = createNode(root);
             // ensure top-level pom, modules, and source roots are visible quickly by expanding project node and adding those children
             proj.setExpanded(true);
-            // eagerly add pom if present
-            if (root.resolve("pom.xml").toFile().exists()) {
-                proj.getChildren().add(new TreeItem<>(root.resolve("pom.xml")));
-            }
-            for (String m : model.getModules()) proj.getChildren().add(createNode(root.resolve(m)));
-            for (Path sr : model.getSourceRoots()) proj.getChildren().add(createNode(sr));
+            java.util.Set<Path> pinned = new java.util.LinkedHashSet<>();
+            Path pom = root.resolve("pom.xml");
+            if (pom.toFile().exists()) pinned.add(pom);
+            for (String m : model.getModules()) pinned.add(root.resolve(m));
+            pinned.addAll(model.getSourceRoots());
+            for (Path p : pinned) proj.getChildren().add(createNode(p));
             projectTree.getRoot().getChildren().add(proj);
          } catch (Exception e) {
              // fallback: show user.dir
@@ -342,23 +360,18 @@ public class MainWindowController {
         if (lsp != null) {
             int offset = area.getCaretPosition();
             String prefix = getCompletionPrefix(area);
-            suggestions = lsp.complete(filePath, offset, prefix);
+            suggestions = lsp.complete(filePath, offset, prefix, area.getText());
+        }
+        if (suggestions == null) {
+            suggestions = KEYWORDS;
         }
 
         ContextMenu menu = new ContextMenu();
         List<MenuItem> items = new ArrayList<>();
-        if (suggestions != null) {
-            for (String s : suggestions) {
-                MenuItem it = new MenuItem(s);
-                it.setOnAction(e -> insertCompletion(area, s));
-                items.add(it);
-            }
-        } else {
-            for (String k : KEYWORDS) {
-                MenuItem it = new MenuItem(k);
-                it.setOnAction(e -> insertCompletion(area, k));
-                items.add(it);
-            }
+        for (String s : suggestions) {
+            MenuItem it = new MenuItem(s);
+            it.setOnAction(e -> insertCompletion(area, s));
+            items.add(it);
         }
         menu.getItems().addAll(items);
         area.getCaretBounds().ifPresent(bounds -> {
@@ -517,27 +530,27 @@ public class MainWindowController {
 
     @FXML
     public void onToolProject() {
-        if (projectTree != null) projectTree.requestFocus();
+        toggleProjectPane();
     }
 
     @FXML
     public void onToolDatabase() {
-        selectToolTab("Database");
+        toggleDrawerFor("Database");
     }
 
     @FXML
     public void onToolRun() {
-        selectToolTab("Run");
+        toggleDrawerFor("Run");
     }
 
     @FXML
     public void onToolBuild() {
-        selectToolTab("Build");
+        toggleDrawerFor("Build");
     }
 
     @FXML
     public void onToolGit() {
-        selectToolTab("Git");
+        toggleDrawerFor("Git");
     }
 
     @FXML
@@ -721,15 +734,15 @@ public class MainWindowController {
         if (runConfigs.isEmpty()) {
             Path root = WorkspaceManager.getWorkspaceRoot();
             runConfigs.addAll(detectDefaultConfigs(root));
+        } else {
+            ensureDefaultConfigs(WorkspaceManager.getWorkspaceRoot());
         }
         refreshRunConfigChoice();
     }
 
     private void refreshRunConfigsForWorkspace(Path root) {
-        if (runConfigs.isEmpty()) {
-            runConfigs.addAll(detectDefaultConfigs(root));
-            refreshRunConfigChoice();
-        }
+        ensureDefaultConfigs(root);
+        refreshRunConfigChoice();
     }
 
     private void saveRunConfigs() {
@@ -765,16 +778,102 @@ public class MainWindowController {
     private List<RunConfig> detectDefaultConfigs(Path root) {
         List<RunConfig> out = new ArrayList<>();
         if (root == null) return out;
-        if (Files.exists(root.resolve("pom.xml"))) {
+        if (isSpringBootProject(root)) {
             out.add(new RunConfig("Spring Boot", RunType.SPRING_BOOT, "mvn", "spring-boot:run", root.toString()));
         }
         if (Files.exists(root.resolve("angular.json"))) {
             out.add(new RunConfig("Angular", RunType.ANGULAR, "", "", root.toString()));
         }
-        if (Files.exists(root.resolve("package.json")) && out.stream().noneMatch(c -> c.type == RunType.ANGULAR)) {
+        if (isReactProject(root) && out.stream().noneMatch(c -> c.type == RunType.ANGULAR)) {
+            out.add(new RunConfig("React", RunType.NODE, "", "", root.toString()));
+        } else if (Files.exists(root.resolve("package.json")) && out.stream().noneMatch(c -> c.type == RunType.ANGULAR)) {
             out.add(new RunConfig("Node", RunType.NODE, "", "", root.toString()));
         }
         return out;
+    }
+
+    private void ensureDefaultConfigs(Path root) {
+        if (root == null) return;
+        if (isSpringBootProject(root) && !hasRunConfig("Spring Boot")) {
+            runConfigs.add(new RunConfig("Spring Boot", RunType.SPRING_BOOT, "mvn", "spring-boot:run", root.toString()));
+        }
+        if (Files.exists(root.resolve("angular.json")) && !hasRunConfig("Angular")) {
+            runConfigs.add(new RunConfig("Angular", RunType.ANGULAR, "", "", root.toString()));
+        }
+        if (isReactProject(root) && !hasRunConfig("React")) {
+            runConfigs.add(new RunConfig("React", RunType.NODE, "", "", root.toString()));
+        } else if (Files.exists(root.resolve("package.json")) && !hasRunConfig("Node")) {
+            runConfigs.add(new RunConfig("Node", RunType.NODE, "", "", root.toString()));
+        }
+    }
+
+    private boolean hasRunConfig(String name) {
+        for (RunConfig c : runConfigs) {
+            if (name.equalsIgnoreCase(c.name)) return true;
+        }
+        return false;
+    }
+
+    private boolean isSpringBootProject(Path root) {
+        if (root == null || !Files.exists(root.resolve("pom.xml"))) return false;
+        Path src = root.resolve("src/main/java");
+        if (!Files.exists(src)) return false;
+        try (java.util.stream.Stream<Path> s = Files.walk(src)) {
+            return s.filter(p -> p.toString().endsWith(".java"))
+                    .anyMatch(this::containsSpringBootAnnotation);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private boolean containsSpringBootAnnotation(Path file) {
+        try {
+            String text = Files.readString(file);
+            return text.contains("@SpringBootApplication");
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private boolean isReactProject(Path root) {
+        Path pkg = root != null ? root.resolve("package.json") : null;
+        if (pkg == null || !Files.exists(pkg)) return false;
+        try {
+            String text = Files.readString(pkg);
+            return text.contains("\"react\"") || text.contains("react-scripts");
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private void updateProjectHealth(Path root) {
+        if (healthStatusLabel == null) return;
+        boolean spring = isSpringBootProject(root);
+        boolean angular = root != null && Files.exists(root.resolve("angular.json"));
+        boolean react = isReactProject(root);
+        if (spring || angular || react) {
+            String label = spring ? "Spring Boot ready" : (angular ? "Angular ready" : "React ready");
+            setHealthStatus(label, "mdi2c-cloud-check", "status-ok");
+        } else if (root != null && Files.exists(root.resolve("pom.xml"))) {
+            setHealthStatus("No Spring Boot app", "mdi2c-cloud-alert", "status-warn");
+        } else if (root != null && Files.exists(root.resolve("package.json"))) {
+            setHealthStatus("No runnable app", "mdi2c-cloud-alert", "status-warn");
+        } else {
+            setHealthStatus("No project detected", "mdi2c-cloud-alert", "status-warn");
+        }
+    }
+
+    private void setHealthStatus(String text, String iconLiteral, String statusClass) {
+        javafx.application.Platform.runLater(() -> {
+            healthStatusLabel.setText(text);
+            healthStatusLabel.getStyleClass().removeAll("status-ok", "status-warn", "status-error");
+            healthStatusLabel.getStyleClass().add(statusClass);
+            if (iconLiteral != null) {
+                FontIcon icon = new FontIcon(iconLiteral);
+                icon.getStyleClass().add("status-icon");
+                healthStatusLabel.setGraphic(icon);
+            }
+        });
     }
 
     private String resolveExecutable(String command) {
@@ -949,6 +1048,92 @@ public class MainWindowController {
                 return;
             }
         }
+    }
+
+    private void setupDrawer() {
+        if (drawerPane == null) return;
+        drawerPane.setVisible(false);
+        drawerPane.setManaged(true);
+        drawerPane.setTranslateX(drawerPane.getPrefWidth() > 0 ? drawerPane.getPrefWidth() : getDrawerWidth());
+        if (drawerCloseButton != null) drawerCloseButton.setOnAction(e -> setDrawerOpen(false));
+        if (toolTabs != null) {
+            toolTabs.getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> {
+                if (newV != null && drawerTitle != null) drawerTitle.setText(newV.getText());
+            });
+        }
+    }
+
+    private void toggleProjectPane() {
+        if (projectPane == null) return;
+        if (projectTransition != null) projectTransition.stop();
+        double width = getProjectWidth();
+        projectTransition = new TranslateTransition(Duration.millis(160), projectPane);
+        if (projectOpen) {
+            projectTransition.setToX(-width);
+            projectTransition.setOnFinished(e -> {
+                projectPane.setVisible(false);
+                projectPane.setManaged(false);
+                projectOpen = false;
+            });
+        } else {
+            projectPane.setManaged(true);
+            projectPane.setVisible(true);
+            projectPane.setTranslateX(-width);
+            projectTransition.setToX(0);
+            projectTransition.setOnFinished(e -> projectOpen = true);
+            if (projectTree != null) projectTree.requestFocus();
+        }
+        projectTransition.playFromStart();
+    }
+
+    private double getProjectWidth() {
+        if (projectPane == null) return 260;
+        double width = projectPane.getWidth();
+        if (width <= 0) width = projectPane.getPrefWidth();
+        if (width <= 0) width = 260;
+        return width;
+    }
+
+    private void toggleDrawerFor(String tabName) {
+        String current = toolTabs != null && toolTabs.getSelectionModel().getSelectedItem() != null
+                ? toolTabs.getSelectionModel().getSelectedItem().getText()
+                : null;
+        if (drawerOpen && current != null && current.equalsIgnoreCase(tabName)) {
+            setDrawerOpen(false);
+            return;
+        }
+        selectToolTab(tabName);
+        setDrawerOpen(true);
+    }
+
+    private void setDrawerOpen(boolean open) {
+        if (drawerPane == null) return;
+        if (drawerTransition != null) drawerTransition.stop();
+        double width = getDrawerWidth();
+        drawerTransition = new TranslateTransition(Duration.millis(180), drawerPane);
+        if (open) {
+            drawerPane.setVisible(true);
+            drawerPane.setManaged(true);
+            drawerPane.setTranslateX(width);
+            drawerTransition.setToX(0);
+            drawerTransition.setOnFinished(e -> drawerOpen = true);
+        } else {
+            drawerTransition.setToX(width);
+            drawerTransition.setOnFinished(e -> {
+                drawerPane.setVisible(false);
+                drawerPane.setManaged(true);
+                drawerOpen = false;
+            });
+        }
+        drawerTransition.playFromStart();
+    }
+
+    private double getDrawerWidth() {
+        if (drawerPane == null) return 360;
+        double width = drawerPane.getWidth();
+        if (width <= 0) width = drawerPane.getPrefWidth();
+        if (width <= 0) width = 360;
+        return width;
     }
 
     private enum RunType { SPRING_BOOT, NODE, ANGULAR, CUSTOM }

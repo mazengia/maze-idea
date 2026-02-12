@@ -2,42 +2,70 @@
 
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
+<?import org.kordamp.ikonli.javafx.FontIcon?>
 
 <BorderPane xmlns:fx="http://javafx.com/fxml" styleClass="ide-root"
             fx:controller="com.maze.mazeidea.MainWindowController">
 
     <top>
         <VBox spacing="4" styleClass="top-bar">
-            <MenuBar styleClass="main-menu">
-                <Menu text="File">
-                    <MenuItem text="Open..." onAction="#onOpenProject" />
-                    <MenuItem fx:id="menuNewProject"
-                              text="New Project..."
-                              onAction="#onNewProject" />
-                    <SeparatorMenuItem/>
-                    <MenuItem text="Exit" onAction="#onExit"/>
-                </Menu>
-                <Menu text="Edit"/>
-                <Menu text="View"/>
-                <Menu text="Navigate">
-                    <MenuItem text="Search..." onAction="#onSearch" />
-                </Menu>
-                <Menu text="Run">
-                    <MenuItem text="Run Selected" onAction="#onRun" />
-                    <MenuItem text="Debug Selected" onAction="#onDebug" />
-                    <SeparatorMenuItem/>
-                    <MenuItem text="Edit Configurations..." onAction="#onEditRunConfigs" />
-                </Menu>
-                <Menu text="Help"/>
-            </MenuBar>
-            <HBox spacing="10" alignment="CENTER_LEFT" styleClass="toolbar">
-                <Button text="New Project" onAction="#onNewProject" styleClass="primary-action" />
-                <Button text="Open" onAction="#onOpenProject" />
-                <Button text="Run" onAction="#onRun" />
-                <Button text="Search" onAction="#onSearch" />
-                <ChoiceBox fx:id="runConfigChoice" />
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <MenuBar styleClass="main-menu">
+                    <Menu text="File">
+                        <MenuItem text="Open..." onAction="#onOpenProject" />
+                        <MenuItem fx:id="menuNewProject"
+                                  text="New Project..."
+                                  onAction="#onNewProject" />
+                        <SeparatorMenuItem/>
+                        <MenuItem text="Exit" onAction="#onExit"/>
+                    </Menu>
+                    <Menu text="Edit"/>
+                    <Menu text="View"/>
+                    <Menu text="Navigate">
+                        <MenuItem text="Search..." onAction="#onSearch" />
+                    </Menu>
+                    <Menu text="Run">
+                        <graphic><FontIcon iconLiteral="mdi2p-play"/></graphic>
+                        <MenuItem text="Run Selected" onAction="#onRun">
+                            <graphic><FontIcon iconLiteral="mdi2p-play"/></graphic>
+                        </MenuItem>
+                        <MenuItem text="Debug Selected" onAction="#onDebug">
+                            <graphic><FontIcon iconLiteral="mdi2b-bug"/></graphic>
+                        </MenuItem>
+                        <SeparatorMenuItem/>
+                        <MenuItem text="Edit Configurations..." onAction="#onEditRunConfigs">
+                            <graphic><FontIcon iconLiteral="mdi2c-cog-outline"/></graphic>
+                        </MenuItem>
+                    </Menu>
+                    <Menu text="Build">
+                        <graphic><FontIcon iconLiteral="mdi2h-hammer"/></graphic>
+                        <MenuItem text="Open Build Tool" onAction="#onToolBuild">
+                            <graphic><FontIcon iconLiteral="mdi2h-hammer"/></graphic>
+                        </MenuItem>
+                    </Menu>
+                    <Menu text="Git">
+                        <graphic><FontIcon iconLiteral="mdi2g-git"/></graphic>
+                        <MenuItem text="Open Git Tool" onAction="#onToolGit">
+                            <graphic><FontIcon iconLiteral="mdi2g-git"/></graphic>
+                        </MenuItem>
+                    </Menu>
+                    <Menu text="Help"/>
+                </MenuBar>
+                <HBox spacing="6" alignment="CENTER_LEFT" styleClass="run-bar">
+                    <Button onAction="#onRun" styleClass="run-button">
+                        <tooltip><Tooltip text="Run"/></tooltip>
+                        <graphic><FontIcon iconLiteral="mdi2p-play"/></graphic>
+                    </Button>
+                    <Button onAction="#onDebug" styleClass="run-button">
+                        <tooltip><Tooltip text="Debug"/></tooltip>
+                        <graphic><FontIcon iconLiteral="mdi2b-bug"/></graphic>
+                    </Button>
+                    <ChoiceBox fx:id="runConfigChoice" />
+                </HBox>
                 <Region HBox.hgrow="ALWAYS"/>
-                <TextField promptText="Search Everywhere..." styleClass="search-field" />
+                <Label fx:id="healthStatusLabel" text="Checking..." styleClass="status-pill status-warn">
+                    <graphic><FontIcon iconLiteral="mdi2c-cloud-alert"/></graphic>
+                </Label>
             </HBox>
         </VBox>
     </top>
@@ -45,54 +73,68 @@
     <left>
         <HBox spacing="0" styleClass="left-dock">
             <VBox spacing="6" styleClass="tool-strip">
-                <Button fx:id="toolProjectButton" text="Project" onAction="#onToolProject" styleClass="tool-strip-button" />
-                <Button fx:id="toolDatabaseButton" text="Database" onAction="#onToolDatabase" styleClass="tool-strip-button" />
-                <Button fx:id="toolRunButton" text="Run" onAction="#onToolRun" styleClass="tool-strip-button" />
-                <Button fx:id="toolBuildButton" text="Build" onAction="#onToolBuild" styleClass="tool-strip-button" />
-                <Button fx:id="toolGitButton" text="Git" onAction="#onToolGit" styleClass="tool-strip-button" />
-                <Button fx:id="toolTerminalButton" text="Terminal" onAction="#onToolTerminal" styleClass="tool-strip-button" />
-            </VBox>
-            <VBox spacing="6" prefWidth="260" styleClass="tool-window">
+                <Button fx:id="toolProjectButton" onAction="#onToolProject" styleClass="tool-strip-button">
+                    <tooltip><Tooltip text="Project"/></tooltip>
+                    <graphic><FontIcon iconLiteral="mdi2f-folder"/></graphic>
+                </Button>
+             </VBox>
+            <VBox fx:id="projectPane" spacing="6" prefWidth="260" styleClass="tool-window">
                 <Label text="Project" styleClass="section-title"/>
                 <TreeView fx:id="projectTree" VBox.vgrow="ALWAYS" styleClass="project-tree"/>
             </VBox>
         </HBox>
     </left>
 
-    <center>
-        <TabPane fx:id="editorTabs" styleClass="editor-tabs"/>
-    </center>
-
     <right>
-        <TabPane fx:id="toolTabs" prefWidth="340" styleClass="tool-tabs">
-            <tabs>
-                <Tab text="Tools">
-                    <VBox spacing="6" styleClass="tool-window">
-                        <Label text="Tool Windows" styleClass="section-title"/>
-                        <ListView fx:id="toolList" VBox.vgrow="ALWAYS" styleClass="tool-list"/>
-                    </VBox>
-                </Tab>
-                <Tab text="Database">
-                    <fx:include source="database-tool.fxml"/>
-                </Tab>
-                <Tab text="Run">
-                    <VBox spacing="6" styleClass="tool-window">
-                        <Label text="Run" styleClass="section-title"/>
-                        <Label text="Use the Run menu or toolbar to start a configuration." wrapText="true"/>
-                    </VBox>
-                </Tab>
-                <Tab text="Build">
-                    <fx:include source="build-tool.fxml"/>
-                </Tab>
-                <Tab text="Git">
-                    <fx:include source="git-tool.fxml"/>
-                </Tab>
-                <Tab text="Terminal">
-                    <fx:include source="terminal-tool.fxml"/>
-                </Tab>
-            </tabs>
-        </TabPane>
+        <VBox spacing="6" styleClass="right-tool-strip">
+            <Button fx:id="toolDatabaseButton" onAction="#onToolDatabase" styleClass="tool-strip-button">
+                <tooltip><Tooltip text="Database"/></tooltip>
+                <graphic><FontIcon iconLiteral="mdi2d-database"/></graphic>
+            </Button>
+        </VBox>
     </right>
+
+    <center>
+        <StackPane fx:id="centerStack">
+            <TabPane fx:id="editorTabs" styleClass="editor-tabs"/>
+            <BorderPane fx:id="drawerPane" prefWidth="360" styleClass="drawer-pane" StackPane.alignment="CENTER_RIGHT">
+                <top>
+                    <HBox spacing="8" alignment="CENTER_LEFT" styleClass="drawer-header">
+                        <Label fx:id="drawerTitle" text="Database" styleClass="section-title"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <Button fx:id="drawerCloseButton" text="✕" styleClass="drawer-close"/>
+                    </HBox>
+                </top>
+                <center>
+                    <TabPane fx:id="toolTabs" styleClass="tool-tabs drawer-tabs" tabClosingPolicy="UNAVAILABLE">
+                        <tabs>
+                            <Tab text="Tools">
+                                <VBox spacing="6" styleClass="tool-window">
+                                    <Label text="Tool Windows" styleClass="section-title"/>
+                                    <ListView fx:id="toolList" VBox.vgrow="ALWAYS" styleClass="tool-list"/>
+                                </VBox>
+                            </Tab>
+                            <Tab text="Database">
+                                <fx:include source="database-tool.fxml"/>
+                            </Tab>
+                            <Tab text="Run">
+                                <VBox spacing="6" styleClass="tool-window">
+                                    <Label text="Run" styleClass="section-title"/>
+                                    <Label text="Use the Run menu to start a configuration." wrapText="true"/>
+                                </VBox>
+                            </Tab>
+                            <Tab text="Build">
+                                <fx:include source="build-tool.fxml"/>
+                            </Tab>
+                            <Tab text="Git">
+                                <fx:include source="git-tool.fxml"/>
+                            </Tab>
+                        </tabs>
+                    </TabPane>
+                </center>
+            </BorderPane>
+        </StackPane>
+    </center>
 
     <bottom>
         <HBox spacing="8" alignment="CENTER_LEFT" styleClass="status-bar">

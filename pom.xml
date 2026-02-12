@@ -73,6 +73,11 @@
             <version>12.3.1</version>
         </dependency>
         <dependency>
+            <groupId>org.kordamp.ikonli</groupId>
+            <artifactId>ikonli-materialdesign2-pack</artifactId>
+            <version>12.3.1</version>
+        </dependency>
+        <dependency>
             <groupId>org.kordamp.bootstrapfx</groupId>
             <artifactId>bootstrapfx-core</artifactId>
             <version>0.4.0</version>
@@ -107,6 +112,25 @@
             <version>0.10.9</version>
         </dependency>
 
+        <!-- Terminal emulator + PTY for full TTY apps -->
+        <dependency>
+            <groupId>org.jetbrains.jediterm</groupId>
+            <artifactId>jediterm-pty</artifactId>
+            <version>2.69</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.jediterm</groupId>
+            <artifactId>jediterm-core</artifactId>
+            <version>3.54</version>
+        </dependency>
+
+
+        <dependency>
+            <groupId>org.jetbrains.pty4j</groupId>
+            <artifactId>pty4j</artifactId>
+            <version>0.12.13</version>
+        </dependency>
+
         <!-- LSP4J for language server protocol integration -->
         <dependency>
             <groupId>org.eclipse.lsp4j</groupId>
@@ -139,6 +163,16 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <repositories>
+        <repository>
+            <id>jetbrains-intellij-deps</id>
+            <url>https://packages.jetbrains.team/maven/p/ij/intellij-dependencies</url>
+            <releases>
+                <updatePolicy>always</updatePolicy>
+            </releases>
+        </repository>
+    </repositories>
 
     <build>
         <plugins>

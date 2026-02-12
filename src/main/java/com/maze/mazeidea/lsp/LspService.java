@@ -16,11 +16,16 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * LSP service with basic LSP4J integration. Starts external LSP processes per workspace (when configured),
@@ -32,10 +37,16 @@ public class LspService {
     private final Map<Path, LanguageServer> workspaceServers = new ConcurrentHashMap<>();
     private final Map<String, Integer> docVersions = new ConcurrentHashMap<>();
     private final ExecutorService executor = Executors.newCachedThreadPool();
+    private final Map<String, Set<String>> fileSymbols = new ConcurrentHashMap<>();
+    private final Map<Path, ConcurrentHashMap<String, Integer>> workspaceSymbolCounts = new ConcurrentHashMap<>();
+
+    private static final Pattern SYMBOL_PATTERN = Pattern.compile("\\b[A-Za-z_][A-Za-z0-9_]*\\b");
+    private static final String[] FALLBACK_KEYWORDS = new String[]{"public","private","protected","class","void","int","String","new","return","if","else","for","while","switch","case"};
 
     public LspService() {}
 
     public void startForWorkspace(Path workspace) {
+        if (workspaceServers.containsKey(workspace)) return;
         String cmdTemplate = System.getProperty("mazeidea.lsp.command");
         if (cmdTemplate == null || cmdTemplate.isBlank()) return;
         String cmdStr = cmdTemplate.replace("${workspace}", workspace.toAbsolutePath().toString());
@@ -84,6 +95,7 @@ public class LspService {
         }
         Process p = workspaceProcesses.remove(workspace);
         if (p != null) p.destroy();
+        workspaceSymbolCounts.remove(workspace);
     }
 
     public void shutdown() {
@@ -95,7 +107,9 @@ public class LspService {
     }
 
     public void didOpen(Path file, String text) {
-        LanguageServer server = workspaceServers.get(file.getParent());
+        Path workspace = workspaceForFile(file);
+        LanguageServer server = workspace != null ? workspaceServers.get(workspace) : null;
+        updateSymbols(workspace, file, text);
         if (server == null) return;
         TextDocumentItem item = new TextDocumentItem(file.toUri().toString(), languageIdFor(file), 1, text);
         DidOpenTextDocumentParams params = new DidOpenTextDocumentParams(item);
@@ -104,7 +118,9 @@ public class LspService {
     }
 
     public void didChange(Path file, String newText) {
-        LanguageServer server = workspaceServers.get(file.getParent());
+        Path workspace = workspaceForFile(file);
+        LanguageServer server = workspace != null ? workspaceServers.get(workspace) : null;
+        updateSymbols(workspace, file, newText);
         if (server == null) return;
         String uri = file.toUri().toString();
         int ver = docVersions.getOrDefault(uri, 1) + 1;
@@ -116,25 +132,31 @@ public class LspService {
     }
 
     public String[] complete(Path file, int offset, String prefix) {
-        LanguageServer server = workspaceServers.get(file.getParent());
+        String text = null;
+        try { text = Files.readString(file); } catch (Exception ignored) {}
+        return complete(file, offset, prefix, text);
+    }
+
+    public String[] complete(Path file, int offset, String prefix, String text) {
+        Path workspace = workspaceForFile(file);
+        LanguageServer server = workspace != null ? workspaceServers.get(workspace) : null;
         if (server == null) {
-            // fallback to keywords
-            String[] keywords = new String[]{"public","private","protected","class","void","int","String","new","return","if","else","for","while","switch","case"};
-            return Arrays.stream(keywords).filter(k -> prefix == null || k.startsWith(prefix)).toArray(String[]::new);
+            return fallbackCompletions(workspace, prefix);
         }
         try {
             String uri = file.toUri().toString();
-            String text = Files.readString(file);
-            Position pos = positionFromOffset(text, offset);
+            String content = text != null ? text : Files.readString(file);
+            Position pos = positionFromOffset(content, offset);
             TextDocumentIdentifier tid = new TextDocumentIdentifier(uri);
             CompletionParams cp = new CompletionParams(tid, pos);
             CompletableFuture<Either<List<CompletionItem>, CompletionList>> fut = server.getTextDocumentService().completion(cp);
             Either<List<CompletionItem>, CompletionList> res = fut.get(2, TimeUnit.SECONDS);
             List<CompletionItem> items = res.isLeft() ? res.getLeft() : res.getRight().getItems();
-            return items.stream().map(it -> it.getLabel()).filter(s -> prefix == null || s.startsWith(prefix)).toArray(String[]::new);
+            String[] lspItems = items.stream().map(CompletionItem::getLabel).filter(s -> prefix == null || s.startsWith(prefix)).toArray(String[]::new);
+            return mergeCompletions(lspItems, fallbackCompletions(workspace, prefix));
         } catch (Exception e) {
             System.err.println("Completion error: " + e.getMessage());
-            return new String[0];
+            return fallbackCompletions(workspace, prefix);
         }
     }
 
@@ -155,6 +177,69 @@ public class LspService {
         if (name.endsWith(".ts")) return "typescript";
         if (name.endsWith(".js")) return "javascript";
         return "plaintext";
+    }
+
+    private Path workspaceForFile(Path file) {
+        Path best = null;
+        for (Path root : workspaceServers.keySet()) {
+            if (file.startsWith(root)) {
+                if (best == null || root.getNameCount() > best.getNameCount()) best = root;
+            }
+        }
+        if (best != null) return best;
+        try {
+            Path root = com.maze.mazeidea.WorkspaceManager.getWorkspaceRoot();
+            if (root != null && file.startsWith(root)) return root;
+        } catch (Exception ignored) {}
+        return file.getParent();
+    }
+
+    private void updateSymbols(Path workspace, Path file, String text) {
+        if (workspace == null || text == null) return;
+        Set<String> next = extractSymbols(text);
+        String uri = file.toUri().toString();
+        Set<String> prev = fileSymbols.put(uri, next);
+        ConcurrentHashMap<String, Integer> counts = workspaceSymbolCounts.computeIfAbsent(workspace, k -> new ConcurrentHashMap<>());
+        if (prev != null) {
+            for (String sym : prev) {
+                counts.computeIfPresent(sym, (k, v) -> v > 1 ? v - 1 : null);
+            }
+        }
+        for (String sym : next) {
+            counts.merge(sym, 1, Integer::sum);
+        }
+    }
+
+    private Set<String> extractSymbols(String text) {
+        Set<String> out = new HashSet<>();
+        Matcher m = SYMBOL_PATTERN.matcher(text);
+        while (m.find()) {
+            out.add(m.group());
+        }
+        return out;
+    }
+
+    private String[] fallbackCompletions(Path workspace, String prefix) {
+        Set<String> out = new HashSet<>();
+        for (String k : FALLBACK_KEYWORDS) {
+            if (prefix == null || k.startsWith(prefix)) out.add(k);
+        }
+        if (workspace != null) {
+            Map<String, Integer> counts = workspaceSymbolCounts.get(workspace);
+            if (counts != null) {
+                for (String sym : counts.keySet()) {
+                    if (prefix == null || sym.startsWith(prefix)) out.add(sym);
+                }
+            }
+        }
+        return out.toArray(new String[0]);
+    }
+
+    private String[] mergeCompletions(String[] primary, String[] fallback) {
+        LinkedHashSet<String> out = new LinkedHashSet<>();
+        if (primary != null) out.addAll(Arrays.asList(primary));
+        if (fallback != null) out.addAll(Arrays.asList(fallback));
+        return out.toArray(new String[0]);
     }
 
     private static class LanguageClientImpl implements LanguageClient {
